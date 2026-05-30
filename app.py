@@ -4,7 +4,7 @@ import plotly.express as px
 from datetime import datetime
 import io
 
-# Nuevas librerías para procesar archivos de la biblioteca de Windows
+# Librerías para procesar archivos de la biblioteca de Windows
 import pypdf
 import docx
 
@@ -29,8 +29,9 @@ st.sidebar.caption(
 
 st.sidebar.write("---")
 
-# 🎛️ MENÚ DESPLEGABLE DE NAVEGACIÓN PRINCIPAL
+# 🎛️ MENÚ DESPLEGABLE DE NAVEGACIÓN PRINCIPAL (ACTUALIZADO CON DASHBOARD)
 menu = st.sidebar.selectbox("Módulos del Sistema", [
+    "0. Dashboard Interactividad Empresarial",
     "1. Asentar Diario (Input)",
     "2. Libro Diario General",
     "3. Libro Mayor Analítico",
@@ -68,14 +69,88 @@ st.write("---")
 # ENRUTAMIENTO DEL MENÚ
 # ==============================================================================
 
+# --- MÓDULO 0: DASHBOARD INTERACTIVO (NUEVO SUBMÓDULO) ---
+if menu == "0. Dashboard Interactividad Empresarial":
+    st.header("📈 Dashboard Analítico de Rendimiento")
+    st.write("Análisis gráfico en tiempo real del flujo operativo de la empresa (Ingresos vs. Gastos).")
+    
+    df_dashboard = st.session_state.contabilidad.copy()
+    
+    if df_dashboard.empty:
+        st.info("📊 El dashboard se estructurará automáticamente cuando registre los primeros movimientos en el Libro Diario.")
+    else:
+        # Selector interactivo de moneda para los gráficos
+        moneda_dash = st.radio("Expresar analíticas del Dashboard en:", ["Bolívares (Bs)", "Dólares ($)"], horizontal=True)
+        
+        # Clasificar movimientos en función del Plan de Cuentas
+        # Cuentas que empiezan con 4 = Ingresos (Naturaleza Acreedora por Haber)
+        # Cuentas que empiezan con 5 = Gastos/Costos (Naturaleza Deudora por Debe)
+        df_dashboard["Clasificacion"] = df_dashboard["Código Cuenta"].apply(
+            lambda x: "Ingreso" if x.startswith("4") else ("Gasto" if x.startswith("5") else "Otro")
+        )
+        
+        # Filtrar solo cuentas de resultados
+        df_res = df_dashboard[df_dashboard["Clasificacion"].isin(["Ingreso", "Gasto"])].copy()
+        
+        if df_res.empty:
+            st.warning("⚠️ Hay asientos registrados, pero ninguno corresponde a cuentas de Ingresos (4) o Gastos (5).")
+        else:
+            # Asignar montos según la divisa seleccionada
+            if moneda_dash == "Bolívares (Bs)":
+                df_res["Monto_Final"] = df_res.apply(lambda r: r["Haber_Bs"] if r["Clasificacion"] == "Ingreso" else r["Debe_Bs"], axis=1)
+                simbolo = "Bs"
+            else:
+                df_res["Monto_Final"] = df_res.apply(lambda r: r["Haber_USD"] if r["Clasificacion"] == "Ingreso" else r["Debe_USD"], axis=1)
+                simbolo = "$"
+                
+            # Totales absolutos
+            total_ingresos = df_res[df_res["Clasificacion"] == "Ingreso"]["Monto_Final"].sum()
+            total_gastos = df_res[df_res["Clasificacion"] == "Gasto"]["Monto_Final"].sum()
+            utilidad_neta = total_ingresos - total_gastos
+            
+            # Tarjetas de KPIS métricos en pantalla
+            kpi1, kpi2, kpi3 = st.columns(3)
+            kpi1.metric("Total Ingresos Operativos", f"{simbolo} {total_ingresos:,.2f}")
+            kpi2.metric("Total Gastos y Costos", f"{simbolo} {total_gastos:,.2f}", delta=f"-{simbolo} {total_gastos:,.2f}", delta_color="inverse")
+            
+            if utilidad_neta >= 0:
+                kpi3.metric("Utilidad del Ejercicio (VEN-NIF)", f"{simbolo} {utilidad_neta:,.2f}", delta="Superávit")
+            else:
+                kpi3.metric("Pérdida del Ejercicio (VEN-NIF)", f"{simbolo} {utilidad_neta:,.2f}", delta="Déficit", delta_color="inverse")
+                
+            st.write("---")
+            
+            # Gráficos Dinámicos de Plotly
+            col_g1, col_g2 = st.columns(2)
+            
+            with col_g1:
+                st.subheader("Comparativa Temporal: Ingresos vs Gastos")
+                # Agrupar por Fecha y Clasificación para el histórico
+                df_trend = df_res.groupby(["Fecha", "Clasificacion"])["Monto_Final"].sum().reset_index()
+                fig_trend = px.bar(
+                    df_trend, x="Fecha", y="Monto_Final", color="Clasificacion",
+                    barmode="group", labels={"Monto_Final": f"Total ({simbolo})"},
+                    color_discrete_map={"Ingreso": "#2ecc71", "Gasto": "#e74c3c"}
+                )
+                st.plotly_chart(fig_trend, use_container_width=True)
+                
+            with col_g2:
+                st.subheader("Distribución Porcentual de Gastos")
+                df_pie_gastos = df_res[df_res["Clasificacion"] == "Gasto"].groupby("Cuenta")["Monto_Final"].sum().reset_index()
+                if not df_pie_gastos.empty:
+                    fig_pie = px.pie(
+                        df_pie_gastos, values="Monto_Final", names="Cuenta",
+                        hole=0.4, color_discrete_sequence=px.colors.sequential.RdBu
+                    )
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                else:
+                    st.write("No se registran gastos para graficar segmentaciones.")
+
 # --- MÓDULO 1: ASENTAR DIARIO ---
-if menu == "1. Asentar Diario (Input)":
+elif menu == "1. Asentar Diario (Input)":
     st.header("📝 Registro de Asientos Contables (Partida Doble)")
     st.write("Conforme al Artículo 34 del Código de Comercio, se deben asentar cronológicamente las operaciones indicando la cuenta deudora y acreedora.")
     
-    # --------------------------------------------------------------------------
-    # NUEVA SECCIÓN: IMPORTACIÓN DE ARCHIVOS DESDE LA BIBLIOTECA DE WINDOWS
-    # --------------------------------------------------------------------------
     st.markdown("### 📥 Asistente de Importación Inteligente (Excel, PDF, Word)")
     st.write("Cargue estados de cuenta, facturas de gastos o comprobantes de compras para extraer su información automáticamente.")
     
@@ -84,7 +159,6 @@ if menu == "1. Asentar Diario (Input)":
         type=["xlsx", "xls", "csv", "pdf", "docx"]
     )
     
-    # Variables de ayuda para pre-llenar el formulario
     glosa_sugerida = ""
     monto_sugerido = 0.0
     
@@ -92,7 +166,6 @@ if menu == "1. Asentar Diario (Input)":
         nombre_archivo = archivo_importado.name
         st.info(f"📂 Archivo detectado: {nombre_archivo}")
         
-        # Caso A: Archivos de datos (Excel / CSV) -> Ideales para Estados de Cuenta o Libros auxiliares
         if nombre_archivo.endswith(('.xlsx', '.xls', '.csv')):
             try:
                 if nombre_archivo.endswith('.csv'):
@@ -103,7 +176,6 @@ if menu == "1. Asentar Diario (Input)":
                 st.write("📊 **Vista previa de los datos del archivo:**")
                 st.dataframe(df_ext.head(3), use_container_width=True)
                 
-                # Intenta buscar una columna numérica para sugerir un monto
                 columnas_numericas = df_ext.select_dtypes(include=['number']).columns
                 if len(columnas_numericas) > 0:
                     monto_sugerido = float(df_ext[columnas_numericas[0]].iloc[0])
@@ -112,7 +184,6 @@ if menu == "1. Asentar Diario (Input)":
             except Exception as e:
                 st.error(f"Error al leer el archivo Excel/CSV: {e}")
                 
-        # Caso B: Archivos PDF -> Ideales para Facturas de Gastos digitales
         elif nombre_archivo.endswith('.pdf'):
             try:
                 lector_pdf = pypdf.PdfReader(archivo_importado)
@@ -128,7 +199,6 @@ if menu == "1. Asentar Diario (Input)":
             except Exception as e:
                 st.error(f"Error al procesar el PDF: {e}")
                 
-        # Caso C: Archivos de Word (Docx) -> Ideales para Contratos de compra o minutas
         elif nombre_archivo.endswith('.docx'):
             try:
                 doc = docx.Document(archivo_importado)
@@ -143,9 +213,7 @@ if menu == "1. Asentar Diario (Input)":
                 st.error(f"Error al procesar el archivo Word: {e}")
 
     st.markdown("---")
-    # --------------------------------------------------------------------------
     
-    # Generador incremental automático de número de asientos
     if not st.session_state.contabilidad.empty:
         siguiente_asiento = int(st.session_state.contabilidad["ID_Asiento"].max()) + 1
     else:
@@ -155,8 +223,6 @@ if menu == "1. Asentar Diario (Input)":
     
     with st.form("form_asiento", clear_on_submit=True):
         fecha_asiento = st.date_input("Fecha de Registro Legal", datetime.now())
-        
-        # Se utilizan las variables sugeridas si se cargó algún documento previo
         glosa_general = st.text_input("Concepto / Glosa del Asiento", value=glosa_sugerida, placeholder="Ej: Registro de ventas según factura fiscal N°...")
         
         st.markdown("##### **Renglón 1: Cuenta de Cargo (DEBE)**")
@@ -185,22 +251,19 @@ if menu == "1. Asentar Diario (Input)":
             if monto_debe <= 0 or monto_haber <= 0:
                 st.error("❌ Los valores ingresados en el asiento deben ser mayores a cero.")
             else:
-                # Conversión bimonetaria estricta de acuerdo a tasas BCV
                 debe_bs = monto_debe if moneda_debe == "Bs" else monto_debe * tasa_bcv
                 debe_usd = monto_debe if moneda_debe == "$" else monto_debe / tasa_bcv
                 
                 haber_bs = monto_haber if moneda_haber == "Bs" else monto_haber * tasa_bcv
                 haber_usd = monto_haber if moneda_haber == "$" else monto_haber / tasa_bcv
                 
-                # Forzar validación contable de balance cuadriculado
                 if round(debe_bs, 2) != round(haber_bs, 2):
                     st.warning(f"⚠️ Asiento ajustado por diferencia marginal cambiaria. Equivalencia balanceada a: {debe_bs:,.2f} Bs.")
                     haber_bs = debe_bs
                     haber_usd = debe_usd
                 
-                # Estructuración de registros contables paralelos
                 fila_debe = {
-                    "ID_Asiento": siguiente_asiento, "Fecha": str(fecha_asiento), 
+                    "ID_Asiento": penultimate_asiento := siguiente_asiento, "Fecha": str(fecha_asiento), 
                     "Código Cuenta": cuenta_debe_cod, "Cuenta": cuenta_debe_nom, 
                     "Descripción": glosa_general, "Debe_Bs": debe_bs, "Haber_Bs": 0.0, 
                     "Debe_USD": debe_usd, "Haber_USD": 0.0, "Tasa": tasa_bcv
@@ -239,7 +302,6 @@ elif menu == "2. Libro Diario General":
             
         st.dataframe(df_mostrar, use_container_width=True)
         
-        # Generación de Excel para descargas de auditoría
         buffer = io.BytesIO()
         with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
             df_mostrar.to_excel(writer, index=False, sheet_name='Libro Diario Legal')
@@ -290,7 +352,6 @@ elif menu == "4. Balance de Comprobación":
     if df_diario.empty:
         st.info("No hay datos contables suficientes.")
     else:
-        # Agrupaciones matemáticas contables en Bolívares
         bal_comprobacion = df_diario.groupby(["Código Cuenta", "Cuenta"]).agg(
             Total_Debe=('Debe_Bs', 'sum'),
             Total_Haber=('Haber_Bs', 'sum')
@@ -315,19 +376,16 @@ elif menu == "5. Estado de Situación Financiera":
     if df_diario.empty:
         st.info("No existen saldos para computar cierres financieros.")
     else:
-        # Cálculo de saldos acumulados netos finales por cuentas
         saldos_globales = df_diario.groupby(["Código Cuenta", "Cuenta"]).agg(
             D_bs=('Debe_Bs', 'sum'),
             H_bs=('Haber_Bs', 'sum')
         ).reset_index()
         saldos_globales["Saldo_Neto_Bs"] = saldos_globales["D_bs"] - saldos_globales["H_bs"]
         
-        # Segmentación por dígito inicial según buenas prácticas contables latinoamericanas
         activos_df = saldos_globales[saldos_globales["Código Cuenta"].str.startswith("1")]
         pasivos_df = saldos_globales[saldos_globales["Código Cuenta"].str.startswith("2")]
         patrimonio_df = saldos_globales[saldos_globales["Código Cuenta"].str.startswith("3")]
         
-        # Renderizado del Estado de Situación Financiera en Pantalla
         col_izq, col_der = st.columns(2)
         
         with col_izq:
@@ -344,11 +402,9 @@ elif menu == "5. Estado de Situación Financiera":
             st.write("**Patrimonio Neto Corp:**")
             st.dataframe(patrimonio_df[["Cuenta", "Saldo_Neto_Bs"]].rename(columns={"Saldo_Neto_Bs": "Monto (Bs)"}), use_container_width=True)
             
-            # El pasivo y patrimonio contablemente suman con signo inverso/crédito
             total_p_p = abs(pasivos_df["Saldo_Neto_Bs"].sum()) + abs(patrimonio_df["Saldo_Neto_Bs"].sum())
             st.markdown(f"**TOTAL PASIVO Y PATRIMONIO:** `{total_p_p:,.2f} Bs.`")
             
-        # Descarga de la Suite Completa de Estados Financieros a Excel
         buffer_suite = io.BytesIO()
         with pd.ExcelWriter(buffer_suite, engine='openpyxl') as writer:
             activos_df.to_excel(writer, index=False, sheet_name='Activos')

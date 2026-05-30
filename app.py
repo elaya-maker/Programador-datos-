@@ -406,4 +406,23 @@ elif st.session_state.modulo_activo == "Mayor":
             else:
                 df_c_vista = df_cuenta[["Fecha", "ID_Asiento", "Descripción", "Debe_USD", "Haber_USD"]]
                 saldo_neto = df_c_vista["Debe_USD"].sum() - df_c_vista["Haber_USD"].sum()
-                st.dataframe(df_c_vista.rename(columns={"Debe_
+                st.dataframe(df_c_vista.rename(columns={"Debe_USD": "Debe ($)", "Haber_USD": "Haber ($)"}), use_container_width=True)
+                st.markdown(f"**Saldo de Cuenta:** `$ {saldo_neto:,.2f}`")
+            st.write("---")
+
+# --- MÓDULO 4: BALANCE DE COMPROBACIÓN ---
+elif st.session_state.modulo_activo == "Comprobacion":
+    st.header("⚖️ Balance de Comprobación - JAC Venezuela")
+    st.write("Verificación técnica del principio de igualdad matemática en los libros contables.")
+    
+    df_diario = st.session_state.contabilidad.copy()
+    
+    if df_diario.empty:
+        st.info("No hay datos contables suficientes.")
+    else:
+        bal_comprobacion = df_diario.groupby(["Código Cuenta", "Cuenta"]).agg(
+            Total_Debe=('Debe_Bs', 'sum'),
+            Total_Haber=('Haber_Bs', 'sum')
+        ).reset_index()
+        
+        bal_comprobacion["Saldo Deudor (Bs)"] = bal_comprobacion.apply(lambda r: r["Total_Debe"] - r["Total_Haber"] if r["Total_Debe"] >= r["Total_Haber"] else 0.0, axis=1)

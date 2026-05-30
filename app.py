@@ -158,12 +158,11 @@ elif menu == "5. Balance de Comprobación":
 elif menu == "6. Estado de Situación Financiera":
     st.session_state.modulo_activo = "Situacion"
 
-
 # ==============================================================================
 # ENRUTAMIENTO DINÁMICO DE MÓDULOS OPERATIVOS
 # ==============================================================================
 
-# --- MÓDULO: CONCILIACIÓN Y CONSOLIDADO DE BANCOS ---
+# --- MÓDULO: CONCILIACIÓN Y CONSOLIDADO DE BANCOS (DETALLES MOV GULF 2026) ---
 if st.session_state.modulo_activo == "ConciliacionBancos":
     st.header("🔄 Auditoría, Conciliación y Consolidado de Bancos - GULF 2026")
     st.write("Cargue el archivo de movimientos de Windows para agrupar las cuentas y estructurar la pestaña analítica unificada.")
@@ -179,6 +178,7 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
             pestanas = excel_file.sheet_names
             st.success(f"✅ Archivo leído correctamente. Se detectaron {len(pestanas)} pestañas originales.")
             
+            # Formato estándar unificado y limpio para la hoja CONSOLIDADO
             columnas_estructuradas = [
                 "ORIGEN_PESTANA", "FECHA", "REFERENCIA/CONCEPTO", "DESCRIPCION", 
                 "CLASIFICACION INTERNA", "DEBITO/EGRESO (BS)", "CREDITO/INGRESO (BS)", 
@@ -196,25 +196,27 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                 df_hoja = excel_file.parse(nombre_hoja)
                 diccionario_hojas_originales[nombre_hoja] = df_hoja.copy()
                 
-                # 1. Detección dinámica de filas cabecera reales
+                # 1. Detección dinámica y salto automático de filas vacías superiores o banners de títulos
                 skip_rows_index = 0
                 for i in range(min(len(df_hoja), 6)):
                     linea_valores = df_hoja.iloc[i].astype(str).str.upper().tolist()
                     if any("FECHA" in str(cell) or "DESCRIPCION" in str(cell) or "CREDITO" in str(cell) for cell in linea_valores):
                         skip_rows_index = i + 1
+                        # Volver a leer fijando esa fila específica como cabecera real
                         df_hoja = excel_file.parse(nombre_hoja, skiprows=skip_rows_index)
                         break
                 
+                # Normalizar los encabezados obtenidos
                 df_hoja.columns = [str(c).strip().upper() for c in df_hoja.columns]
                 
                 if df_hoja.empty or len(df_hoja.columns) < 2:
                     continue
                 
-                # 2. Inicializar estructura limpia
+                # 2. Inicializar la estructura limpia
                 df_normalizado = pd.DataFrame(index=range(len(df_hoja)), columns=columnas_estructuradas)
                 df_normalizado["ORIGEN_PESTANA"] = nombre_hoja
                 
-                # Mapeo de Textos
+                # --- MAPEO DE TEXTOS ---
                 col_fecha = [c for c in df_hoja.columns if "FECHA" in c]
                 if col_fecha: df_normalizado["FECHA"] = df_hoja[col_fecha[0]]
                 
@@ -224,75 +226,80 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                 col_desc = [c for c in df_hoja.columns if "DESCRIPCION" in c]
                 if col_desc: df_normalizado["DESCRIPCION"] = df_hoja[col_desc[0]]
                 
-                col_clas = [c for c in df_hoja.columns if "COLUMNA1" in c or "CODIGO" in c]
+                col_clas = [c for c in df_hoja.columns if "COLUMNA1" in c]
                 if col_clas: df_normalizado["CLASIFICACION INTERNA"] = df_hoja[col_clas[0]]
                 
-                # Mapeo Inteligente de Monedas
+                # --- MAPEO INTELIGENTE DE MONEDAS ---
+                # Identificar si la pestaña transacciona nativamente en dólares
                 es_pestana_usd = any(x in nombre_hoja.upper() for x in ["USD", "CASH", "KTSU"])
                 
-                col_debito_base = [c for c in df_hoja.columns if ("DEBITO" in c or "EGRESO" in c or "PRESTAMO KTSU" in c) and "$" not in c]
-                col_credito_base = [c for c in df_hoja.columns if ("CREDITO" in c or "INGRESO" in c or "PRESTAMO GULF" in c) and "$" not in c]
-                col_saldo_base = [c for c in df_hoja.columns if ("SALDO" in c or "DISPONIBLE" in c or "DEUDA" in c) and "$" not in c]
+                # Ubicar columnas del archivo original
+                col_debito_base = [c for c in df_hoja.columns if ("DEBITO" in c or "EGRESO" in c) and "$" not in c]
+                col_credito_base = [c for c in df_hoja.columns if ("CREDITO" in c or "INGRESO" in c) and "$" not in c]
+                col_saldo_base = [c for c in df_hoja.columns if ("SALDO" in c or "DISPONIBLE" in c) and "$" not in c]
                 
-                col_debito_usd = [c for c in df_hoja.columns if "DEBITO $" in c or "DEBITO$" in c]
-                col_credito_usd = [c for c in df_hoja.columns if "CREDITO $" in c or "CREDITO$" in c]
-                col_saldo_usd = [c for c in df_hoja.columns if "SALDO $" in c or "SALDO$" in c]
+                col_debito_usd = [c for c in df_hoja.columns if "DEBITO $" in c or "DEBITO$" in c or "PRESTAMO KTSU" in c]
+                col_credito_usd = [c for c in df_hoja.columns if "CREDITO $" in c or "CREDITO$" in c or "PRESTAMO GULF" in c]
+                col_saldo_usd = [c for c in df_hoja.columns if "SALDO $" in c or "SALDO$" in c or "DEUDA" in c]
                 
                 col_tasa = [c for c in df_hoja.columns if "TASA" in c]
                 if col_tasa: df_normalizado["TASA DE CAMBIO"] = pd.to_numeric(df_hoja[col_tasa[0]], errors='coerce')
                 
+                # Rellenar valores de flujos según tipo de cuenta
                 if es_pestana_usd:
+                    # Cuentas USD nativas: Debito/Crédito va a la sección de dólares directamente
                     df_normalizado["DEBITO/EGRESO ($)"] = df_hoja[col_debito_base[0]] if col_debito_base else 0
                     df_normalizado["CREDITO/INGRESO ($)"] = df_hoja[col_credito_base[0]] if col_credito_base else 0
                     df_normalizado["SALDO ($)"] = df_hoja[col_saldo_base[0]] if col_saldo_base else 0
+                    
                     df_normalizado["DEBITO/EGRESO (BS)"] = 0.0
                     df_normalizado["CREDITO/INGRESO (BS)"] = 0.0
                     df_normalizado["SALDO (BS)"] = 0.0
                 else:
+                    # Cuentas nacionales en Bs (con o sin espejo en USD al final)
                     df_normalizado["DEBITO/EGRESO (BS)"] = df_hoja[col_debito_base[0]] if col_debito_base else 0
                     df_normalizado["CREDITO/INGRESO (BS)"] = df_hoja[col_credito_base[0]] if col_credito_base else 0
                     df_normalizado["SALDO (BS)"] = df_hoja[col_saldo_base[0]] if col_saldo_base else 0
+                    
                     df_normalizado["DEBITO/EGRESO ($)"] = df_hoja[col_debito_usd[0]] if col_debito_usd else 0
                     df_normalizado["CREDITO/INGRESO ($)"] = df_hoja[col_credito_usd[0]] if col_credito_usd else 0
                     df_normalizado["SALDO ($)"] = df_hoja[col_saldo_usd[0]] if col_saldo_usd else 0
 
+                # Convertir de forma segura flujos a tipos numéricos
                 columnas_numericas = ["DEBITO/EGRESO (BS)", "CREDITO/INGRESO (BS)", "SALDO (BS)", "DEBITO/EGRESO ($)", "CREDITO/INGRESO ($)", "SALDO ($)"]
                 for col_num in columnas_numericas:
                     df_normalizado[col_num] = pd.to_numeric(df_normalizado[col_num], errors='coerce').fillna(0.0)
                 
-                # Limpieza de registros inválidos
+                # 3. Limpieza de filas de basura contable o registros duplicados de encabezado
                 df_normalizado = df_normalizado.dropna(subset=['FECHA', 'DESCRIPCION'], how='all')
                 df_normalizado = df_normalizado[df_normalizado['DESCRIPCION'].astype(str).str.upper() != 'DESCRIPCION']
                 
                 if not df_normalizado.empty:
                     lista_movimientos_consolidados.append(df_normalizado)
                     
-                    # Extraer saldos limpios finales de forma segura
-                    df_valid_salder = df_normalizado.dropna(subset=["FECHA"])
-                    s_bs = float(df_valid_salder["SALDO (BS)"].iloc[-1]) if not df_valid_salder.empty else 0.0
-                    s_usd = float(df_valid_salder["SALDO ($)"].iloc[-1]) if not df_valid_salder.empty else 0.0
-
+                    # Generar los totales individuales para la pestaña de métricas y conciliación
                     resumen_bancos.append({
                         "Cuenta / Origen": nombre_hoja,
                         "Moneda Principal": "USD" if es_pestana_usd else "VES (Bs)",
                         "Total Débitos (Bs)": float(df_normalizado["DEBITO/EGRESO (BS)"].sum()),
                         "Total Créditos (Bs)": float(df_normalizado["CREDITO/INGRESO (BS)"].sum()),
-                        "Saldo Final Remanente (Bs)": s_bs,
+                        "Saldo Final Remanente (Bs)": float(df_normalizado["SALDO (BS)"].iloc[-1]),
                         "Total Débitos ($)": float(df_normalizado["DEBITO/EGRESO ($)"].sum()),
                         "Total Créditos ($)": float(df_normalizado["CREDITO/INGRESO ($)"].sum()),
-                        "Saldo Final Remanente ($)": s_usd
+                        "Saldo Final Remanente ($)": float(df_normalizado["SALDO ($)"].iloc[-1])
                     })
             
-            # Unificación Final Seguro (Manejo del Bug Fila de Respaldo)
+            # Unificar todas las transacciones recolectadas en el DataFrame final
             if lista_movimientos_consolidados:
                 df_consolidado_final = pd.concat(lista_movimientos_consolidados, ignore_index=True)
+                # Formatear la columna de fechas de forma limpia
                 df_consolidado_final["FECHA"] = pd.to_datetime(df_consolidado_final["FECHA"], errors='coerce').dt.strftime('%Y-%m-%d').fillna("")
             else:
-                df_consolidado_final = pd.DataFrame(columns=columnas_estructuradas)
+                df_consolidado_final = pd.DataFrame(columns=columnas_structured)
                 
             df_conciliacion_resumen = pd.DataFrame(resumen_bancos)
             
-            # Visualización en pestañas
+            # Distribución por pestañas visuales de control en Streamlit
             tab1, tab2 = st.tabs(["📋 Nueva Hoja: CONSOLIDADO (Estructurado)", "📊 Nueva Hoja: Conciliación / Resumen de Saldos"])
             
             with tab1:
@@ -303,15 +310,18 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                 st.markdown("### ⚖️ Arqueo e Indicadores de Saldos de Cierre por Pestaña")
                 st.dataframe(df_conciliacion_resumen, use_container_width=True)
                 
-            # Escritura del Binario de Excel de Salida
+            # Compilación del libro Excel usando openpyxl reconstruyendo el reporte unificado
             buffer_gulf_salida = io.BytesIO()
             with pd.ExcelWriter(buffer_gulf_salida, engine='openpyxl') as writer:
+                # 1. Posicionar primero la pestaña CONSOLIDADO general para mejor auditoría visual
                 df_consolidado_final.to_excel(writer, sheet_name='CONSOLIDADO', index=False)
                 df_conciliacion_resumen.to_excel(writer, sheet_name='CONCILIACION_RESUMEN', index=False)
                 
+                # 2. Conservar e inyectar las pestañas originales ordenadas e intactas
                 for name, df_orig in diccionario_hojas_originales.items():
-                    df_orig.to_excel(writer, sheet_name=name[:30], index=False)
+                    df_orig.to_excel(writer, sheet_name=name[:30], index=False) # Límite de 30 caracteres para Excel
                 
+                # Autoajuste automático de las celdas en la hoja CONSOLIDADO
                 workbook = writer.book
                 if 'CONSOLIDADO' in workbook.sheetnames:
                     worksheet = writer.sheets['CONSOLIDADO']
@@ -507,6 +517,7 @@ elif st.session_state.modulo_activo == "Comprobacion":
             Total_Haber=('Haber_Bs', 'sum')
         ).reset_index()
         
+        # Totales generales de control para el principio de partida doble
         sum_debe = bal_comprobacion["Total_Debe"].sum()
         sum_haber = bal_comprobacion["Total_Haber"].sum()
         

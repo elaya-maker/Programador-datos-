@@ -29,7 +29,7 @@ st.sidebar.caption(
 
 st.sidebar.write("---")
 
-# 🎛️ MENÚ DESPLEGABLE DE NAVEGACIÓN PRINCIPAL (ACTUALIZADO CON DASHBOARD)
+# 🎛️ MENÚ DESPLEGABLE DE NAVEGACIÓN PRINCIPAL
 menu = st.sidebar.selectbox("Módulos del Sistema", [
     "0. Dashboard Interactividad Empresarial",
     "1. Asentar Diario (Input)",
@@ -69,7 +69,7 @@ st.write("---")
 # ENRUTAMIENTO DEL MENÚ
 # ==============================================================================
 
-# --- MÓDULO 0: DASHBOARD INTERACTIVO (NUEVO SUBMÓDULO) ---
+# --- MÓDULO 0: DASHBOARD INTERACTIVO ---
 if menu == "0. Dashboard Interactividad Empresarial":
     st.header("📈 Dashboard Analítico de Rendimiento")
     st.write("Análisis gráfico en tiempo real del flujo operativo de la empresa (Ingresos vs. Gastos).")
@@ -79,23 +79,17 @@ if menu == "0. Dashboard Interactividad Empresarial":
     if df_dashboard.empty:
         st.info("📊 El dashboard se estructurará automáticamente cuando registre los primeros movimientos en el Libro Diario.")
     else:
-        # Selector interactivo de moneda para los gráficos
         moneda_dash = st.radio("Expresar analíticas del Dashboard en:", ["Bolívares (Bs)", "Dólares ($)"], horizontal=True)
         
-        # Clasificar movimientos en función del Plan de Cuentas
-        # Cuentas que empiezan con 4 = Ingresos (Naturaleza Acreedora por Haber)
-        # Cuentas que empiezan con 5 = Gastos/Costos (Naturaleza Deudora por Debe)
         df_dashboard["Clasificacion"] = df_dashboard["Código Cuenta"].apply(
             lambda x: "Ingreso" if x.startswith("4") else ("Gasto" if x.startswith("5") else "Otro")
         )
         
-        # Filtrar solo cuentas de resultados
         df_res = df_dashboard[df_dashboard["Clasificacion"].isin(["Ingreso", "Gasto"])].copy()
         
         if df_res.empty:
             st.warning("⚠️ Hay asientos registrados, pero ninguno corresponde a cuentas de Ingresos (4) o Gastos (5).")
         else:
-            # Asignar montos según la divisa seleccionada
             if moneda_dash == "Bolívares (Bs)":
                 df_res["Monto_Final"] = df_res.apply(lambda r: r["Haber_Bs"] if r["Clasificacion"] == "Ingreso" else r["Debe_Bs"], axis=1)
                 simbolo = "Bs"
@@ -103,12 +97,10 @@ if menu == "0. Dashboard Interactividad Empresarial":
                 df_res["Monto_Final"] = df_res.apply(lambda r: r["Haber_USD"] if r["Clasificacion"] == "Ingreso" else r["Debe_USD"], axis=1)
                 simbolo = "$"
                 
-            # Totales absolutos
             total_ingresos = df_res[df_res["Clasificacion"] == "Ingreso"]["Monto_Final"].sum()
             total_gastos = df_res[df_res["Clasificacion"] == "Gasto"]["Monto_Final"].sum()
             utilidad_neta = total_ingresos - total_gastos
             
-            # Tarjetas de KPIS métricos en pantalla
             kpi1, kpi2, kpi3 = st.columns(3)
             kpi1.metric("Total Ingresos Operativos", f"{simbolo} {total_ingresos:,.2f}")
             kpi2.metric("Total Gastos y Costos", f"{simbolo} {total_gastos:,.2f}", delta=f"-{simbolo} {total_gastos:,.2f}", delta_color="inverse")
@@ -120,12 +112,10 @@ if menu == "0. Dashboard Interactividad Empresarial":
                 
             st.write("---")
             
-            # Gráficos Dinámicos de Plotly
             col_g1, col_g2 = st.columns(2)
             
             with col_g1:
                 st.subheader("Comparativa Temporal: Ingresos vs Gastos")
-                # Agrupar por Fecha y Clasificación para el histórico
                 df_trend = df_res.groupby(["Fecha", "Clasificacion"])["Monto_Final"].sum().reset_index()
                 fig_trend = px.bar(
                     df_trend, x="Fecha", y="Monto_Final", color="Clasificacion",
@@ -262,8 +252,9 @@ elif menu == "1. Asentar Diario (Input)":
                     haber_bs = debe_bs
                     haber_usd = debe_usd
                 
+                # LINEA CORREGIDA AQUÍ (Se eliminó la asignación inválida interna):
                 fila_debe = {
-                    "ID_Asiento": penultimate_asiento := siguiente_asiento, "Fecha": str(fecha_asiento), 
+                    "ID_Asiento": siguiente_asiento, "Fecha": str(fecha_asiento), 
                     "Código Cuenta": cuenta_debe_cod, "Cuenta": cuenta_debe_nom, 
                     "Descripción": glosa_general, "Debe_Bs": debe_bs, "Haber_Bs": 0.0, 
                     "Debe_USD": debe_usd, "Haber_USD": 0.0, "Tasa": tasa_bcv

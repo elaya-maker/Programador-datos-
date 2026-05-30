@@ -1,0 +1,200 @@
+import os
+import pandas as pd
+
+# 1. Configuración de archivos
+archivo_origen = "DETALLES MOV GULF 2026.xlsx"
+archivo_destino = "DETALLES MOV GULF 2026_CONSOLIDADO.xlsx"
+
+if not os.path.exists(archivo_origen):
+    raise FileNotFoundError(
+        f"No se pudo encontrar el archivo '{archivo_origen}' en el directorio actual. "
+        f"Asegúrate de colocar el script en la misma carpeta que el archivo Excel."
+    )
+
+print("📖 Abriendo el archivo original y leyendo las pestañas...")
+excel_file = pd.ExcelFile(archivo_origen)
+todas_las_pestanas = excel_file.sheet_names
+
+# Lista para almacenar los DataFrames limpios de cada pestaña
+bloques_consolidados = []
+
+print("🚀 Iniciando procesamiento...")
+
+for nombre_hoja in todas_las_pestanas:
+    # Saltar pestañas de consolidación previas si se vuelve a correr el script
+    if "CONSOLIDADO" in nombre_hoja.upper():
+        continue
+
+    print(f"  📦 Analizando: {nombre_hoja}")
+
+    # --- CASO ESPECIAL 1: PESTAÑA 'EFECTIVO' (Doble estructura / Caja Chica) ---
+    if "EFECTIVO" in nombre_hoja.upper() and "BS" not in nombre_hoja.upper():
+        # Leer desde la fila indexada como header (fila 1 en Python / fila 2 real de Excel)
+        df_efectivo = pd.read_excel(excel_file, sheet_name=nombre_hoja, skiprows=1)
+        df_efectivo.columns = [str(c).strip() for c in df_efectivo.columns]
+
+        # Separar Bloque Izquierdo y Bloque Derecho (Caja chica) si existen
+        # El bloque izquierdo usa las primeras columnas (Fecha, Descripcion, Ingresos, Egresos...)
+        columnas_izq = [c for c in df_efectivo.columns if not c.startswith('Columna')][:5]
+        
+        # Procesamos la sección izquierda principal
+        if len(columnas_izq) >= 4:
+            df_izq = df_efectivo.iloc[:, :5].copy()
+            df_izq.columns = ["FECHA", "DESCRIPCION", "CREDITO", "DEBITO", "DISPONIBLE"]
+            df_izq["BANCO / EFECTIVO"] = f"{nombre_hoja} (PPAL)"
+            df_izq["MONEDA"] = "USD"
+            bloques_consolidados.append(df_izq)
+
+        # Procesamos la sección derecha (Caja Chica) si tiene columnas suficientes
+        if df_efectivo.shape[1] >= 11:
+            df_der = df_efectivo.iloc[:, 7:11].copy()
+            df_der.columns = ["FECHA", "DESCRIPCION", "CREDITO", "DEBITO"]
+            df_der["BANCO / EFECTIVO"] = f"{nombre_hoja} (CAJA CHICA)"
+            df_der["MONEDA"] = "USD"
+            bloques_consolidados.append(df_der)
+        continue
+
+    # --- CASO ESPECIAL 2: PESTAÑA 'PRESTAMO KTSU' ---
+    elif "PRESTAMO" in nombre_hoja.upper():
+        df = pd.read_excel(excel_file, sheet_name=nombre_hoja, skiprows=1)
+        df.columns = df.columns.str.strip()
+        
+        # Mapeo específico de préstamos a la estructura estándar
+        df_mapeado = pd.DataFrame()
+        df_mapeado["FECHA"] = df["FECHA"]
+        df_mapeado["BANCO / EFECTIVO"] = nombre_hoja
+        df_mapeado["DESCRIPCION"] = df["DESCRIPCION"]
+        df_mapeado["CATEGORIA"] = df["CONCEPTO"] if "CONCEPTO" in df.columns else "PRESTAMO"
+        df_mapeado["MONEDA"] = "USD"
+        
+        # Flujos cruzados mapeados a Débito/Crédito
+        df_mapeado["DEBITO"] = df["PRESTAMO GULF A KTSU"] if "PRESTAMO GULF A KTSU" in df.columns else 0
+        df_mapeado["CREDITO"] = df["PRESTAMO KTSU A GULF"] if "PRESTAMO KTSU A GULF" in df.columns else 0
+        df_mapeado["DEBITO $"] = df_mapeado["DEBITO"]
+        df_mapeado["CREDITO $"] = df_mapeado["CREDITO"]
+        
+        bloques_consolidados.append(df_mapeado)
+        continue
+
+    # --- CASO 3: CUENTAS BANCARIAS ESTÁNDAR Y EFECTIVO BS ---
+    else:
+        # Ajustar dinámicamente cuántas filas saltar arriba según la pestaña
+        filas_a_saltar = 1
+        if "MERCANTIL NO FISCAL" in nombre_hoja.upper():
+            filas_a_saltar = 2
+        elif "ACTIVO" in nombre_hoja.upper() or "BANCAMIGA" in nombre_hoja.upper() or "BANPLUS" in nombre_hoja.upper() or "PROVINCIAL" in nombre_hoja.upper() or "BNC" in nombre_hoja.upper() or "VENEZUELA" in nombre_hoja.upper() or "BANESCO" in nombre_hoja.upper() or "CTA TERCERO" in nombre_hoja.upper():
+            filas_a_saltar = 1
+        else:
+            filas_a_saltar = 0
+
+        df = pd.read_excel(excel_file, sheet_name=nombre_hoja, skiprows=filas_a_saltar)
+        df.columns = df.columns.str.strip()
+
+        # Si por desalineación de filas no se lee correctamente la columna FECHA, reintentar sin saltar filas
+        if "FECHA" not in df.columns:
+            df = pd.read_excel(excel_file, sheet_name=nombre_hoja, skiprows=0)
+            df.columns = df.columns.str.strip()
+            if "FECHA" not in df.columns:
+                print(f"  ⚠️ Se omitió la pestaña '{nombre_hoja}' porque no se encontró la columna 'FECHA'.")
+                continue
+
+        # Identificación automática de la Moneda nativa de la pestaña
+        if "USD" in nombre_hoja.upper() or "CASH" in nombre_hoja.upper():
+            moneda = "USD"
+        else:
+            moneda = "BS"
+
+        # Mapear columnas dinámicas
+        debito_orig = df["DEBITO"] if "DEBITO" in df.columns else 0
+        credito_orig = df["CREDITO"] if "CREDITO" in df.columns else 0
+
+        # Asignar Categoría buscando los nombres que usas intercambiadamente ('CODIGO' o 'CONCEPTO')
+        categoria = "SIN CATEGORÍA"
+        for col_cat in ["CODIGO", "CONCEPTO", "Columna1"]:
+            if col_cat in df.columns:
+                # Evitar usar descripciones repetidas de "SALDO INICIAL" como categoría
+                categoria = df[col_cat]
+                break
+
+        # Construcción del bloque formateado
+        df_mapeado = pd.DataFrame()
+        df_mapeado["FECHA"] = df["FECHA"]
+        df_mapeado["BANCO / EFECTIVO"] = nombre_hoja
+        df_mapeado["DESCRIPCION"] = df["DESCRIPCION"] if "DESCRIPCION" in df.columns else ""
+        df_mapeado["CATEGORIA"] = categoria
+        df_mapeado["MONEDA"] = moneda
+        df_mapeado["DEBITO"] = debito_orig
+        df_mapeado["CREDITO"] = credito_orig
+
+        # Extraer montos dolarizados en cuentas corrientes en Bs (si existen en el original)
+        if moneda == "USD":
+            df_mapeado["DEBITO $"] = df_mapeado["DEBITO"]
+            df_mapeado["CREDITO $"] = df_mapeado["CREDITO"]
+        else:
+            df_mapeado["DEBITO $"] = df["DEBITO $"] if "DEBITO $" in df.columns else 0
+            df_mapeado["CREDITO $"] = df["CREDITO $"] if "CREDITO $" in df.columns else 0
+
+        bloques_consolidados.append(df_mapeado)
+
+# 2. Consolidación y Limpieza Final del Maestro
+if bloques_consolidados:
+    print("\n🔄 Unificando todos los bloques de datos...")
+    df_maestro = pd.concat(bloques_consolidados, ignore_index=True)
+
+    # Limpiar strings, nulos y rellenar celdas vacías
+    df_maestro["DESCRIPCION"] = df_maestro["DESCRIPCION"].fillna("").astype(str).str.strip()
+    df_maestro["CATEGORIA"] = df_maestro["CATEGORIA"].fillna("SIN CATEGORÍA").astype(str).str.strip()
+    
+    # Estandarizar numéricos y limpiar nans
+    columnas_numericas = ["DEBITO", "CREDITO", "DEBITO $", "CREDITO $"]
+    for col in columnas_numericas:
+        df_maestro[col] = pd.to_numeric(df_maestro[col], errors="coerce").fillna(0)
+
+    # Convertir FECHA a formato correcto y descartar filas totalmente rotas o vacías
+    df_maestro["FECHA"] = pd.to_datetime(df_maestro["FECHA"], errors="coerce")
+    df_maestro = df_maestro[df_maestro["FECHA"].notna()]
+
+    # Filtrar estrictamente filas informativas de saldos anteriores o saldos iniciales
+    palabras_filtro = "SALDO INICIAL|SALDO ANTERIOR|SALDO"
+    df_maestro = df_maestro[
+        ~df_maestro["DESCRIPCION"].str.upper().str.contains(palabras_filtro, na=False) &
+        ~df_maestro["CATEGORIA"].str.upper().str.contains(palabras_filtro, na=False)
+    ]
+
+    # Eliminar filas fantasmas (líneas vacías del Excel que no sumen ni resten nada)
+    df_maestro = df_maestro[
+        (df_maestro["DEBITO"] != 0) | 
+        (df_maestro["CREDITO"] != 0) | 
+        (df_maestro["DEBITO $"] != 0) | 
+        (df_maestro["CREDITO $"] != 0)
+    ]
+
+    # Ordenar cronológicamente (Estructura de Diario General)
+    df_maestro = df_maestro.sort_values(by="FECHA", ascending=True).reset_index(drop=True)
+    
+    # Formatear la fecha para presentación limpia en Excel (AAAA-MM-DD)
+    df_maestro["FECHA"] = df_maestro["FECHA"].dt.strftime("%Y-%m-%d")
+
+    # Reordenar las columnas exactamente como lo requieres
+    columnas_finales = ["FECHA", "BANCO / EFECTIVO", "DESCRIPCION", "CATEGORIA", "MONEDA", "DEBITO", "CREDITO", "DEBITO $", "CREDITO $"]
+    df_maestro = df_maestro[columnas_finales]
+
+    # 3. Guardar en el nuevo archivo Excel respetando el histórico original
+    print(f"💾 Guardando libro unificado en: '{archivo_destino}'...")
+    
+    with pd.ExcelWriter(archivo_destino, engine="openpyxl") as writer:
+        # Colocar la pestaña maestra consolidada en la primera posición
+        df_maestro.to_excel(writer, sheet_name="CONSOLIDADO MAESTRO", index=False)
+        
+        # Volver a volcar las pestañas originales para que mantengas todo en un solo archivo centralizado
+        for nombre_hoja in todas_las_pestanas:
+            if "CONSOLIDADO" not in nombre_hoja.upper():
+                df_original = pd.read_excel(excel_file, sheet_name=nombre_hoja)
+                df_original.to_excel(writer, sheet_name=nombre_hoja, index=False)
+
+    print("\n✨ ¡Proceso completado con éxito! ✨")
+    print(f"📊 Se han unificado un total de {len(df_maestro)} transacciones reales.")
+    print(f"📁 Archivo generado listo para tablas dinámicas: '{archivo_destino}'")
+
+else:
+    print("\n❌ Error: No se pudo extraer información estructurada de ninguna pestaña.")

@@ -14,7 +14,7 @@ if 'contabilidad' not in st.session_state:
         "Debe_Bs", "Haber_Bs", "Debe_USD", "Haber_USD", "Tasa"
     ])
 
-# --- MARCO REGULATORIO VENEZOLANO ---
+# --- MARCO REGULATORIO VENEZOLANO (BARRA LATERAL) ---
 st.sidebar.markdown("### 📜 Marco Regulatorio (VEN-NIF)")
 st.sidebar.caption(
     "Esta herramienta se rige bajo los lineamientos de las **BA VEN-NIF** "
@@ -24,6 +24,11 @@ st.sidebar.caption(
 )
 
 st.sidebar.write("---")
+
+# ==============================================================================
+# 🎛️ MENÚ DESPLEGABLE DE NAVEGACIÓN PRINCIPAL
+# Este componente crea el menú interactivo al ingresar a la aplicación
+# ==============================================================================
 menu = st.sidebar.selectbox("Módulos del Sistema", [
     "1. Asentar Diario (Input)",
     "2. Libro Diario General",
@@ -32,7 +37,7 @@ menu = st.sidebar.selectbox("Módulos del Sistema", [
     "5. Estado de Situación Financiera"
 ])
 
-# Control de Tasa Oficial según regulaciones del BCV
+# Control de Tasa Oficial según regulaciones del BCV en la barra lateral
 tasa_bcv = st.sidebar.number_input("Tasa Oficial BCV del día (Bs/$)", min_value=1.0, value=60.0, step=0.01, format="%.2f")
 
 # Catálogo de Cuentas estandarizado (Estructura jerárquica)
@@ -51,6 +56,16 @@ CATALOGO_CUENTAS = {
     "5.2.01.01": "Gastos de Personal (Nómina LOTTT)",
     "5.2.01.02": "Gastos de Alquiler y Servicios"
 }
+
+# --- TÍTULO PRINCIPAL DE LA PANTALLA ---
+st.title("🇻🇪 Sistema de Automatización Contable Venezolano")
+st.markdown("##### Cumplimiento de Principios VEN-NIF (Pymes / GE) • Doble Columna (Debe/Haber) • Multidivisa Histórica")
+st.write("---")
+
+
+# ==============================================================================
+# ENRUTAMIENTO DEL MENÚ: Dependiendo de lo seleccionado, se despliega cada módulo
+# ==============================================================================
 
 # --- MÓDULO 1: ASENTAR DIARIO ---
 if menu == "1. Asentar Diario (Input)":
@@ -162,7 +177,7 @@ elif menu == "2. Libro Diario General":
         )
 
 # --- MÓDULO 3: LIBRO MAYOR ---
-elif menu == "3. Libro Mayor":
+elif menu == "3. Libro Mayor Analítico":
     st.header("🗂️ Libro Mayor Folio por Folio")
     st.write("Sintetiza los movimientos cargados al Debe y al Haber de cada cuenta de forma analítica.")
     

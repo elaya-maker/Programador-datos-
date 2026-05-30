@@ -32,9 +32,9 @@ with st.sidebar:
     tasa_bcv = st.number_input(
         "💱 Tasa de Cambio Oficial (BCV):",
         min_value=1.0,
-        value=54.50,  # Valor referencial modificable por el usuario
+        value=54.50,  # Modificable dinámicamente
         step=0.01,
-        help="Tasa utilizada para convertir la pestaña 'EFECTIVO' (USD) a Bolívares y viceversa."
+        help="Tasa oficial para convertir la pestaña 'EFECTIVO' (USD) a Bolívares y viceversa."
     )
     
     st.markdown("---")
@@ -42,12 +42,12 @@ with st.sidebar:
     if st.button("🔄 Conciliación y Consolidado", use_container_width=True):
         st.session_state.modulo_activo = "ConciliacionBancos"
         
-    st.caption("JAC Motors Venezuela v2.1 (Entorno de Control Multimoneda)")
+    st.caption("JAC Motors Venezuela v2.2 (Entorno Homologado Multi-moneda)")
 
 # --- MÓDULO PRINCIPAL: CONCILIACIÓN Y CONSOLIDADO DE BANCOS ---
 if st.session_state.modulo_activo == "ConciliacionBancos":
     st.header("🔄 Auditoría, Conciliación y Consolidado de Bancos - GULF 2026")
-    st.write("Cargue el archivo de movimientos para unificar las cuentas y estructurar la pestaña analítica bi-moneda.")
+    st.write("Cargue el archivo de movimientos de Windows para agrupar las cuentas y estructurar la pestaña analítica unificada.")
     
     archivo_gulf = st.file_uploader(
         "Cargar archivo de movimientos bancarios (DETALLES MOV GULF 2026)", 
@@ -78,8 +78,8 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
             resumen_bancos = []
             
             for nombre_hoja in pestanas:
-                # Omitir de la lectura hojas analíticas previas para evitar redundancias
-                if any(x in nombre_hoja.upper() for x in ["CONSOLIDADO", "CONCILIACIÓN", "CONCILIACION"]):
+                # Omitir de la lectura hojas analíticas previas o generadas
+                if any(x in nombre_hoja.upper() for x in ["CONSOLIDADO", "CONCILIACIÓN", "CONCILIACION", "ARQUEO"]):
                     continue
                 
                 # Carga de la estructura de datos correspondiente
@@ -91,18 +91,23 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                 
                 diccionario_hojas_originales[nombre_hoja] = df_hoja.copy()
                 
-                # 1. Salto dinámico de banners superiores buscando la fila de encabezados reales
+                # 1. Eliminar columnas completamente vacías/fantasmas ("Unnamed:") al inicio
+                df_hoja = df_hoja.loc[:, ~df_hoja.columns.str.contains('^Unnamed:', case=False, na=True)]
+                
+                # Salto dinámico de banners superiores buscando la fila de encabezados reales
                 skip_rows_index = 0
                 for i in range(min(len(df_hoja), 6)):
                     linea_valores = df_hoja.iloc[i].astype(str).str.upper().tolist()
-                    if any(any(k in str(cell) for k in ["FECHA", "DESCRIPCION", "CREDITO", "INGRESOS"]) for cell in linea_valores):
+                    if any(any(k in str(cell) for k in ["FECHA", "DESCRIPCION", "CREDITO", "INGRESOS", "EGRESOS"]) for cell in linea_valores):
                         skip_rows_index = i + 1
                         if excel_file is not None:
                             df_hoja = excel_file.parse(nombre_hoja, skiprows=skip_rows_index)
                         break
                 
-                # Normalización estricta de nombres de columnas
+                # Normalización estricta de nombres de columnas (Quitar espacios y pasar a mayúsculas)
                 df_hoja.columns = [str(c).strip().upper() for c in df_hoja.columns]
+                # Eliminar columnas sin nombre después del re-parse
+                df_hoja = df_hoja.loc[:, ~df_hoja.columns.str.contains('^UNNAMED', case=False, na=True)]
                 
                 if df_hoja.empty or len(df_hoja.columns) < 2:
                     continue
@@ -126,118 +131,28 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                 if col_clas: df_normalizado["CLASIFICACION INTERNA"] = df_hoja[col_clas[0]]
                 
                 # --- REGLA LÓGICA CORE: CONTROL DE MONEDA (EFECTIVO USD vs BOLÍVARES) ---
-                # Si la pestaña se llama 'EFECTIVO' (sin 'BS'), se procesa nativamente en USD y se calcula su equivalente en Bs.
+                # Identifica si es la pestaña analítica de divisas en efectivo
                 es_pestana_usd = any(x in nombre_hoja.upper() for x in ["USD", "CASH", "KTSU", "EFECTIVO"]) and "BS" not in nombre_hoja.upper()
                 
+                # Identificación inteligente y unificada de flujos monetarios (Soporta Bancos y Efectivo)
                 col_debito = [c for c in df_hoja.columns if any(k in c for k in ["DEBITO", "EGRESO", "EGRESOS"])]
                 col_credito = [c for c in df_hoja.columns if any(k in c for k in ["CREDITO", "INGRESO", "INGRESOS"])]
                 col_saldo = [c for c in df_hoja.columns if any(k in c for k in ["SALDO", "DISPONIBLE"])]
                 
-                # Casting y limpieza de valores numéricos nulos
+                # Extraer series y forzar casteo numérico seguro limpiando strings o nulos
                 val_debito_orig = pd.to_numeric(df_hoja[col_debito[0]], errors='coerce').fillna(0.0) if col_debito else pd.Series(0.0, index=df_hoja.index)
                 val_credito_orig = pd.to_numeric(df_hoja[col_credito[0]], errors='coerce').fillna(0.0) if col_credito else pd.Series(0.0, index=df_hoja.index)
                 val_saldo_orig = pd.to_numeric(df_hoja[col_saldo[0]], errors='coerce').fillna(0.0) if col_saldo else pd.Series(0.0, index=df_hoja.index)
                 
                 if es_pestana_usd:
-                    # 💵 Valores originales van a las columnas en Dólares
+                    # 💵 Valores originales de "Efectivo" van directamente a las columnas de Dólares ($)
                     df_normalizado["DEBITO/EGRESO ($)"] = val_debito_orig
                     df_normalizado["CREDITO/INGRESO ($)"] = val_credito_orig
                     df_normalizado["SALDO ($)"] = val_saldo_orig
                     
-                    # 🇻🇪 CONVERSIÓN CONCURRENTE A BS (Multiplicado por Tasa BCV)
+                    # 🇻🇪 CONVERSIÓN CONCURRENTE A BOLÍVARES (Multiplicado por la tasa BCV de la barra lateral)
                     df_normalizado["DEBITO/EGRESO (BS)"] = val_debito_orig * tasa_bcv
                     df_normalizado["CREDITO/INGRESO (BS)"] = val_credito_orig * tasa_bcv
                     df_normalizado["SALDO (BS)"] = val_saldo_orig * tasa_bcv
                 else:
-                    # 🇻🇪 Valores originales van a las columnas de Bolívares
-                    df_normalizado["DEBITO/EGRESO (BS)"] = val_debito_orig
-                    df_normalizado["CREDITO/INGRESO (BS)"] = val_credito_orig
-                    df_normalizado["SALDO (BS)"] = val_saldo_orig
-                    
-                    # 💵 CONVERSIÓN CONCURRENTE A DÓLARES (Dividido entre Tasa BCV)
-                    df_normalizado["DEBITO/EGRESO ($)"] = val_debito_orig / tasa_bcv
-                    df_normalizado["CREDITO/INGRESO ($)"] = val_credito_orig / tasa_bcv
-                    df_normalizado["SALDO ($)"] = val_saldo_orig / tasa_bcv
-
-                # Validar tipos numéricos flotantes en bloques transaccionales
-                for col_num in columnas_estructuradas[5:11]:
-                    df_normalizado[col_num] = pd.to_numeric(df_normalizado[col_num], errors='coerce').fillna(0.0)
-                
-                # 3. Filtrado de registros vacíos o duplicaciones de cabeceras en el archivo
-                df_normalizado = df_normalizado.dropna(subset=['FECHA', 'DESCRIPCION'], how='all')
-                df_normalizado = df_normalizado[df_normalizado['DESCRIPCION'].astype(str).str.upper() != 'DESCRIPCION']
-                df_normalizado = df_normalizado[df_normalizado['FECHA'].astype(str).str.strip() != ""]
-                
-                if not df_normalizado.empty:
-                    lista_movimientos_consolidados.append(df_normalizado)
-                    
-                    # Extraer última fila para el reporte de Arqueo / Saldos finales
-                    ultima_fila = df_normalizado.iloc[-1]
-                    
-                    resumen_bancos.append({
-                        "Cuenta / Origen": nombre_hoja,
-                        "Moneda Original": "USD ($)" if es_pestana_usd else "VES (Bs.)",
-                        "Total Débitos (Bs)": float(df_normalizado["DEBITO/EGRESO (BS)"].sum()),
-                        "Total Créditos (Bs)": float(df_normalizado["CREDITO/INGRESO (BS)"].sum()),
-                        "Saldo Cierre (Bs)": float(ultima_fila["SALDO (BS)"]),
-                        "Total Débitos ($)": float(df_normalizado["DEBITO/EGRESO ($)"].sum()),
-                        "Total Créditos ($)": float(df_normalizado["CREDITO/INGRESO ($)"].sum()),
-                        "Saldo Cierre ($)": float(ultima_fila["SALDO ($)"])
-                    })
-            
-            # Consolidación final de la matriz única
-            if lista_movimientos_consolidados:
-                df_consolidado_final = pd.concat(lista_movimientos_consolidados, ignore_index=True)
-                df_consolidado_final["FECHA"] = pd.to_datetime(df_consolidado_final["FECHA"], errors='coerce').dt.strftime('%Y-%m-%d').fillna("")
-            else:
-                df_consolidado_final = pd.DataFrame(columns=columnas_estructuradas)
-                
-            df_conciliacion_resumen = pd.DataFrame(resumen_bancos)
-            
-            # --- INTERFAZ VISUAL EN PANTALLA ---
-            tab1, tab2 = st.tabs(["📋 MATRIZ INTEGRADA (Multimoneda)", "📊 CONTROL DE ARQUEO (Saldos de Cierre)"])
-            
-            with tab1:
-                st.markdown("### 🏦 Matriz Integrada y Homologada de Movimientos (GULF 2026)")
-                st.caption(f"La pestaña 'EFECTIVO' fue procesada originalmente como USD y multiplicada por la tasa BCV ({tasa_bcv} Bs/$).")
-                st.dataframe(df_consolidado_final, use_container_width=True)
-                
-            with tab2:
-                st.markdown("### ⚖️ Arqueo de Saldos y Cierres Consolidados")
-                st.dataframe(df_conciliacion_resumen.style.format({
-                    "Total Débitos (Bs)": "{:,.2f} Bs", "Total Créditos (Bs)": "{:,.2f} Bs", "Saldo Cierre (Bs)": "{:,.2f} Bs",
-                    "Total Débitos ($)": "$ {:,.2f}", "Total Créditos ($)": "$ {:,.2f}", "Saldo Cierre ($)": "$ {:,.2f}"
-                }), use_container_width=True)
-                
-            # --- GENERACIÓN DE EXCEL DE SALIDA MULTIPESTAÑA ---
-            buffer_gulf_salida = io.BytesIO()
-            with pd.ExcelWriter(buffer_gulf_salida, engine='openpyxl') as writer:
-                df_consolidado_final.to_excel(writer, sheet_name='CONSOLIDADO', index=False)
-                df_conciliacion_resumen.to_excel(writer, sheet_name='ARQUEO_RESUMEN', index=False)
-                
-                # Mantener los respaldos de los crudos de datos cargados originalmente
-                for name, df_orig in diccionario_hojas_originales.items():
-                    df_orig.to_excel(writer, sheet_name=name[:30], index=False)
-                
-                # Ajuste automático del ancho de las celdas en el reporte consolidado
-                workbook = writer.book
-                if 'CONSOLIDADO' in workbook.sheetnames:
-                    worksheet = writer.sheets['CONSOLIDADO']
-                    for col in worksheet.columns:
-                        max_len = max(len(str(cell.value or '')) for cell in col)
-                        col_letter = col[0].column_letter
-                        worksheet.column_dimensions[col_letter].width = max(max_len + 3, 11)
-                        
-            st.write("---")
-            st.download_button(
-                label="📥 Descargar Reporte Consolidado (Excel)",
-                data=buffer_gulf_salida.getvalue(),
-                file_name="DETALLES_MOV_GULF_2026_CONSOLIDADO.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
-            
-        except Exception as e:
-            st.error(f"Ocurrió un error procesando las matrices del archivo: {e}")
-            st.exception(e)
-    else:
-        st.info("💡 Por favor, suba el archivo de movimientos en la sección superior para ejecutar el análisis financiero.")
+                    # 🇻🇪 Valores de cuentas en Bolívares nativos van a sus respectivas columnas

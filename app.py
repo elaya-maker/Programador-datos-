@@ -4,6 +4,10 @@ import plotly.express as px
 from datetime import datetime
 import io
 
+# Nuevas librerías para procesar archivos de la biblioteca de Windows
+import pypdf
+import docx
+
 # Configuración de la página
 st.set_page_config(page_title="Sistema Contable Venezolano VEN-NIF", layout="wide", page_icon="🇻🇪")
 
@@ -25,10 +29,7 @@ st.sidebar.caption(
 
 st.sidebar.write("---")
 
-# ==============================================================================
 # 🎛️ MENÚ DESPLEGABLE DE NAVEGACIÓN PRINCIPAL
-# Este componente crea el menú interactivo al ingresar a la aplicación
-# ==============================================================================
 menu = st.sidebar.selectbox("Módulos del Sistema", [
     "1. Asentar Diario (Input)",
     "2. Libro Diario General",
@@ -64,13 +65,85 @@ st.write("---")
 
 
 # ==============================================================================
-# ENRUTAMIENTO DEL MENÚ: Dependiendo de lo seleccionado, se despliega cada módulo
+# ENRUTAMIENTO DEL MENÚ
 # ==============================================================================
 
 # --- MÓDULO 1: ASENTAR DIARIO ---
 if menu == "1. Asentar Diario (Input)":
     st.header("📝 Registro de Asientos Contables (Partida Doble)")
     st.write("Conforme al Artículo 34 del Código de Comercio, se deben asentar cronológicamente las operaciones indicando la cuenta deudora y acreedora.")
+    
+    # --------------------------------------------------------------------------
+    # NUEVA SECCIÓN: IMPORTACIÓN DE ARCHIVOS DESDE LA BIBLIOTECA DE WINDOWS
+    # --------------------------------------------------------------------------
+    st.markdown("### 📥 Asistente de Importación Inteligente (Excel, PDF, Word)")
+    st.write("Cargue estados de cuenta, facturas de gastos o comprobantes de compras para extraer su información automáticamente.")
+    
+    archivo_importado = st.file_uploader(
+        "Arrastre aquí su archivo desde Windows", 
+        type=["xlsx", "xls", "csv", "pdf", "docx"]
+    )
+    
+    # Variables de ayuda para pre-llenar el formulario
+    glosa_sugerida = ""
+    monto_sugerido = 0.0
+    
+    if archivo_importado is not None:
+        nombre_archivo = archivo_importado.name
+        st.info(f"📂 Archivo detectado: {nombre_archivo}")
+        
+        # Caso A: Archivos de datos (Excel / CSV) -> Ideales para Estados de Cuenta o Libros auxiliares
+        if nombre_archivo.endswith(('.xlsx', '.xls', '.csv')):
+            try:
+                if nombre_archivo.endswith('.csv'):
+                    df_ext = pd.read_csv(archivo_importado)
+                else:
+                    df_ext = pd.read_excel(archivo_importado)
+                
+                st.write("📊 **Vista previa de los datos del archivo:**")
+                st.dataframe(df_ext.head(3), use_container_width=True)
+                
+                # Intenta buscar una columna numérica para sugerir un monto
+                columnas_numericas = df_ext.select_dtypes(include=['number']).columns
+                if len(columnas_numericas) > 0:
+                    monto_sugerido = float(df_ext[columnas_numericas[0]].iloc[0])
+                glosa_sugerida = f"Importación de datos desde archivo Excel/CSV: {nombre_archivo}"
+                st.success("✅ Datos tabulares leídos. Use la información de la tabla para llenar el asiento abajo.")
+            except Exception as e:
+                st.error(f"Error al leer el archivo Excel/CSV: {e}")
+                
+        # Caso B: Archivos PDF -> Ideales para Facturas de Gastos digitales
+        elif nombre_archivo.endswith('.pdf'):
+            try:
+                lector_pdf = pypdf.PdfReader(archivo_importado)
+                texto_extraido = ""
+                for pagina in lector_pdf.pages:
+                    texto_extraido += pagina.extract_text()
+                
+                st.write("📄 **Texto detectado en la Factura/Documento PDF:**")
+                st.text_area("Contenido extraído", texto_extraido[:1000], height=120)
+                
+                glosa_sugerida = f"Gasto según documento PDF: {nombre_archivo}"
+                st.success("✅ Texto del PDF extraído con éxito para auditoría visual.")
+            except Exception as e:
+                st.error(f"Error al procesar el PDF: {e}")
+                
+        # Caso C: Archivos de Word (Docx) -> Ideales para Contratos de compra o minutas
+        elif nombre_archivo.endswith('.docx'):
+            try:
+                doc = docx.Document(archivo_importado)
+                texto_word = "\n".join([p.text for p in doc.paragraphs])
+                
+                st.write("📝 **Texto detectado en el documento de Word:**")
+                st.text_area("Contenido del contrato/comprobante", texto_word[:1000], height=120)
+                
+                glosa_sugerida = f"Registro según documento Word: {nombre_archivo}"
+                st.success("✅ Documento Word leído con éxito.")
+            except Exception as e:
+                st.error(f"Error al procesar el archivo Word: {e}")
+
+    st.markdown("---")
+    # --------------------------------------------------------------------------
     
     # Generador incremental automático de número de asientos
     if not st.session_state.contabilidad.empty:
@@ -82,7 +155,9 @@ if menu == "1. Asentar Diario (Input)":
     
     with st.form("form_asiento", clear_on_submit=True):
         fecha_asiento = st.date_input("Fecha de Registro Legal", datetime.now())
-        glosa_general = st.text_input("Concepto / Glosa del Asiento", placeholder="Ej: Registro de ventas según factura fiscal N°...")
+        
+        # Se utilizan las variables sugeridas si se cargó algún documento previo
+        glosa_general = st.text_input("Concepto / Glosa del Asiento", value=glosa_sugerida, placeholder="Ej: Registro de ventas según factura fiscal N°...")
         
         st.markdown("##### **Renglón 1: Cuenta de Cargo (DEBE)**")
         col1, col2, col3 = st.columns([2, 1, 1])
@@ -92,7 +167,7 @@ if menu == "1. Asentar Diario (Input)":
         with col2:
             moneda_debe = st.selectbox("Moneda Base", ["Bs", "$"], key="md")
         with col3:
-            monto_debe = st.number_input("Monto en Moneda Base", min_value=0.0, step=0.01, key="vd")
+            monto_debe = st.number_input("Monto en Moneda Base", min_value=0.0, value=abs(monto_sugerido), step=0.01, key="vd")
             
         st.markdown("##### **Renglón 2: Cuenta de Abono (HABER)**")
         col1_h, col2_h, col3_h = st.columns([2, 1, 1])
@@ -102,7 +177,7 @@ if menu == "1. Asentar Diario (Input)":
         with col2_h:
             moneda_haber = st.selectbox("Moneda Base", ["Bs", "$"], key="mh")
         with col3_h:
-            monto_haber = st.number_input("Monto en Moneda Base", min_value=0.0, step=0.01, key="vh")
+            monto_haber = st.number_input("Monto en Moneda Base", min_value=0.0, value=abs(monto_sugerido), step=0.01, key="vh")
 
         registrar_btn = st.form_submit_button("💾 Procesar y Registrar Asiento")
         

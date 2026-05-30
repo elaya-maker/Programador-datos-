@@ -2,24 +2,24 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
-import io  # ⬅️ ¡Corregido! Importación esencial para la gestión de archivos en memoria
-import openpyxl  # ⬅️ ¡Corregido! Motor de escritura para archivos Excel (.xlsx)
+import io  # Soporte de archivos en memoria
+import openpyxl  # Motor de escritura Excel
 
-# Librerías auxiliares para procesamiento documental complementario
+# Librerías para procesar archivos de la biblioteca de Windows
 import pypdf
 import docx
 
-# Configuración de la interfaz de usuario en Streamlit
+# Configuración de la página de Streamlit
 st.set_page_config(page_title="Portal de Herramientas Contables - Empresa JAC Venezuela", layout="wide", page_icon="🇻🇪")
 
-# Inicializar el estado de la sesión (Libro Mayor Auxiliar de la aplicación)
+# Inicializar el estado de la sesión (Libro Mayor Auxiliar / Base de Datos de la aplicación)
 if 'contabilidad' not in st.session_state:
     st.session_state.contabilidad = pd.DataFrame(columns=[
         "ID_Asiento", "Fecha", "Código Cuenta", "Cuenta", "Descripción", 
         "Debe_Bs", "Haber_Bs", "Debe_USD", "Haber_USD", "Tasa"
     ])
 
-# Inicializar estado para el módulo activo (Navegación del ecosistema)
+# Inicializar estado para el módulo activo (Control de navegación interna)
 if 'modulo_activo' not in st.session_state:
     st.session_state.modulo_activo = "Portal Principal"
 
@@ -28,15 +28,15 @@ st.sidebar.markdown("### 📜 Marco Regulatorio (VEN-NIF)")
 st.sidebar.caption(
     "Esta herramienta se rige bajo los lineamientos de las **BA VEN-NIF** "
     "(Federación de Colegios de Contadores Públicos de Venezuela), el **Código de Comercio** "
-    "(Arts. 32 al 44 sobre obligatoriedad de libros) y las directrices de facturación y "
+    "(Arts. 32 al 44 sobre obligatoriedad de libros) and las directrices de facturación y "
     "retenciones del **SENIAT**. Soporta registros bimonetarios según el Convenio Cambiario N° 1 del BCV."
 )
 st.sidebar.write("---")
 
-# Control de Tasa Oficial BCV en la barra lateral
+# Control de Tasa Oficial según regulaciones del BCV en la barra lateral
 tasa_bcv = st.sidebar.number_input("Tasa Oficial BCV del día (Bs/$)", min_value=1.0, value=60.0, step=0.01, format="%.2f")
 
-# Catálogo de Cuentas Contables estandarizado
+# Catálogo de Cuentas estandarizado
 CATALOGO_CUENTAS = {
     "1.1.01.01": "Efectivo en Caja y Bancos (Bs)",
     "1.1.01.02": "Efectivo en Caja y Bancos ($)",
@@ -54,8 +54,9 @@ CATALOGO_CUENTAS = {
 }
 
 # ==============================================================================
-# 🏢 BANNER CORPORATIVO - EMPRESA JAC VENEZUELA
+# 🏢 DISEÑO INTERACTIVO DEL PORTAL DE BIENVENIDA (PANTALLA PRINCIPAL)
 # ==============================================================================
+
 st.markdown("""
 <div style="background-color: #000000; padding: 25px; border-radius: 12px; margin-bottom: 25px; border-left: 8px solid #ff0000; box-shadow: 0 4px 10px rgba(0,0,0,0.15); display: flex; align-items: center;">
     <div style="margin-right: 25px; border-right: 2px solid #333; padding-right: 25px;">
@@ -68,13 +69,13 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Habilitar retorno rápido si se está navegando en algún sub-módulo
+# Habilitar retorno al menú si se está operando dentro de algún módulo
 if st.session_state.modulo_activo != "Portal Principal":
     if st.button("⬅️ Volver al Menú Principal (JAC Venezuela)"):
         st.session_state.modulo_activo = "Portal Principal"
         st.rerun()
 
-# --- INTERFAZ DEL TABLERO DE CONTROL PRINCIPAL ---
+# --- RENDERIZADO DEL PORTAL PRINCIPAL DE HERRAMIENTAS ---
 if st.session_state.modulo_activo == "Portal Principal":
     st.markdown("### 🏛️ Distribución General de Módulos")
     st.write("Seleccione la dimensión operativa contable o fiscal que desea ejecutar en este momento:")
@@ -110,12 +111,12 @@ if st.session_state.modulo_activo == "Portal Principal":
     with cat_col3:
         st.markdown("#### ⚙️ Procesos Fiscales")
         if st.button("📋 Estado de Situación Financiera (VEN-NIF)", use_container_width=True):
-            st.session_state.modulo_activo = "VisualizarSituacion"
+            st.session_state.modulo_activo = "Situacion"
             st.rerun()
         st.button("🧮 Cálculo Pensiones (9%) / LOCTI (Próximamente)", use_container_width=True, disabled=True)
         st.button("🔍 Verificación Débito Fiscal / Retenciones (Próximamente)", use_container_width=True, disabled=True)
 
-# Selectores de barra lateral (Navegación alternativa)
+# Selector de navegación rápido en la barra lateral
 menu = st.sidebar.selectbox("Navegación Rápida", [
     "Ir al Portal Principal",
     "0. Dashboard Interactividad Empresarial",
@@ -140,12 +141,14 @@ elif menu == "4. Libro Mayor Analítico":
 elif menu == "5. Balance de Comprobación":
     st.session_state.modulo_activo = "Comprobacion"
 elif menu == "6. Estado de Situación Financiera":
-    st.session_state.modulo_activo = "VisualizarSituacion"
+    st.session_state.modulo_activo = "Situacion"
 
 
 # ==============================================================================
-# 🔄 MÓDULO CONSOLIDACIÓN DE BANCOS (EXTRACCIÓN DINÁMICA DE HOJAS)
+# ENRUTAMIENTO DINÁMICO DE MÓDULOS OPERATIVOS
 # ==============================================================================
+
+# --- MÓDULO CONSOLIDADO EXTRACCIÓN REAL: CONCILIACIÓN Y CONSOLIDADO DE BANCOS ---
 if st.session_state.modulo_activo == "ConciliacionBancos":
     st.header("🔄 Auditoría, Conciliación y Consolidado de Bancos - GULF 2026")
     st.write("Cargue el archivo original. El sistema extraerá de forma automática la información real de cada hoja mapeando dinámicamente sus columnas.")
@@ -161,7 +164,7 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
             pestanas = excel_file.sheet_names
             st.success(f"✅ Archivo leído correctamente. Se detectaron {len(pestanas)} pestañas para procesar.")
             
-            # Estructura unificada estricta solicitada
+            # Estructura unificada estricta solicitada de acuerdo con la imagen
             columnas_estructuradas = [
                 "BANCOS/CAJA", "FECHA", "REFERENCIA", "DESCRIPCION BANCO", 
                 "Columna1", "DEBITO", "CREDITO", "SALDO", "TASA", 
@@ -173,20 +176,23 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
             resumen_bancos = []
             
             for nombre_hoja in pestanas:
+                # Omitir hojas de reportes previos calculados si ya existieran en el libro
                 if nombre_hoja in ["Consolidado", "Conciliación"]:
                     continue
                 
+                # Leer hoja original completa
                 df_hoja = excel_file.parse(nombre_hoja)
                 diccionario_hojas_originales[nombre_hoja] = df_hoja
                 
-                # Saneamiento de filas vacías superiores
+                # Limpieza de filas vacías o desplazamientos de cabeceras en blanco de Excel
                 df_hoja = df_hoja.dropna(how='all').reset_index(drop=True)
                 if df_hoja.empty:
                     continue
                 
+                # Normalizar los nombres de columnas de la pestaña original (quitar espacios y mayúsculas)
                 columnas_originales = [str(c).strip().upper() for c in df_hoja.columns]
                 
-                # Detección inteligente si las cabeceras reales vienen desplazadas hacia abajo
+                # Manejar situaciones donde la cabecera real está en la segunda o tercera fila (ej. Mercantil No Fiscal o Efectivo)
                 if "FECHA" not in columnas_originales and len(df_hoja) > 1:
                     for i_row in range(min(3, len(df_hoja))):
                         posible_cabecera = [str(c).strip().upper() for c in df_hoja.iloc[i_row]]
@@ -196,15 +202,16 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                             columnas_originales = [str(c).strip().upper() for c in df_hoja.columns]
                             break
                 
+                # Crear el DataFrame destino con el mismo tamaño de filas que el origen
                 df_mapeado = pd.DataFrame(index=df_hoja.index, columns=columnas_estructuradas)
                 df_mapeado["BANCOS/CAJA"] = nombre_hoja
                 
-                # Homologación semántica inteligente de campos financieros
+                # --- DICCIONARIO DE CORRESPONDENCIAS PARA HOMOLOGACIÓN DE COLUMNAS REALES ---
                 mapa_columnas = {
                     "FECHA": ["FECHA", "FECHA ", "FECHAS"],
                     "REFERENCIA": ["REFERENCIA", "REFERENCIA ", "CONCEPTO", "NRO. REF", "NRO DE REFERENCIA"],
                     "DESCRIPCION BANCO": ["DESCRIPCION", "DESCRIPCION ", "DESCRIPCION BANCO", "CONCEPTO"],
-                    "Columna1": ["COLUMNA1", "COLUMNA 1", "DETALLE", "TIPO TRAN.", "CLASSIFICACION"],
+                    "Columna1": ["COLUMNA1", "COLUMNA 1", "DETALLE", "TIPO TRAN.","CLASSIFICACION"],
                     "DEBITO": ["DEBITO", "DEBITOS", "EGRESOS", "EGRESO", "PRESTAMO KTSU A GULF"],
                     "CREDITO": ["CREDITO", "CREDITOS", "INGRESOS", "INGRESO", "PRESTAMO GULF A KTSU"],
                     "SALDO": ["SALDO", "SALDOS", "DISPONIBLE", "DEUDA"],
@@ -214,6 +221,7 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                     "SALDO $": ["SALDO $", "SALDOS $", "DISPONIBLE $"]
                 }
                 
+                # Mapear datos comparando las variantes semánticas de cada columna
                 for col_destino, variantes in mapa_columnas.items():
                     columna_encontrada = None
                     for col_origen in df_hoja.columns:
@@ -229,18 +237,31 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                         else:
                             df_mapeado[col_destino] = ""
                 
-                # Filtrar filas vacías de fechas y renglones de saldo estático
-                df_mapeado = df_mapeado[df_mapeado["FECHA"].notna() & (df_mapeado["FECHA"].astype(str).str.strip() != "")]
-                df_mapeado = df_mapeado[~df_mapeado["DESCRIPCION BANCO"].astype(str).str.upper().str.contains("SALDO INICIAL", na=False)]
-                df_mapeado = df_mapeado[~df_mapeado["DESCRIPCION BANCO"].astype(str).str.upper().str.contains("SALDO ANTERIOR", na=False)]
+                # --- SANEAMIENTO Y LIMPIEZA CONTABLE DE FILAS ---
+                # Validar registros con fechas reales, eliminar líneas vacías o residuos texturizados
+                df_mapeado = df_mapeado[
+                    df_mapeado["FECHA"].notna() & 
+                    (df_mapeado["FECHA"].astype(str).str.strip() != "")
+                ]
                 
+                # Excluir filas repetitivas o estáticas de "SALDO INICIAL" o "SALDO ANTERIOR" para evitar duplicaciones
+                df_mapeado = df_mapeado[
+                    ~df_mapeado["DESCRIPCION BANCO"].astype(str).str.upper().str.contains("SALDO INICIAL", na=False)
+                ]
+                df_mapeado = df_mapeado[
+                    ~df_mapeado["DESCRIPCION BANCO"].astype(str).str.upper().str.contains("SALDO ANTERIOR", na=False)
+                ]
+                
+                # Forzar conversión a flotantes numéricos limpios para columnas monetarias
                 columnas_moneda = ["DEBITO", "CREDITO", "SALDO", "TASA", "DEBITO $", "CREDITO $", "SALDO $"]
                 for col_m in columnas_moneda:
                     df_mapeado[col_m] = pd.to_numeric(df_mapeado[col_m], errors='coerce').fillna(0.0)
                 
+                # Incluir la información solo si contiene movimientos operativos reales
                 if not df_mapeado.empty:
                     lista_movimientos_consolidados.append(df_mapeado)
                 
+                # Sumatorias analíticas del Banco evaluado
                 total_debito_bs = float(df_mapeado["DEBITO"].sum())
                 total_credito_bs = float(df_mapeado["CREDITO"].sum())
                 total_debito_usd = float(df_mapeado["DEBITO $"].sum())
@@ -256,30 +277,39 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                     "Saldo Neto Movimientos ($)": total_debito_usd - total_credito_usd
                 })
             
+            # --- COMPILACIÓN FINAL DEL CONSOLIDADO OPERATIVO ---
             if lista_movimientos_consolidados:
                 df_consolidado_final = pd.concat(lista_movimientos_consolidados, ignore_index=True)
+                # Formatear la estampa temporal para visualización limpia YYYY-MM-DD
                 df_consolidado_final["FECHA"] = df_consolidado_final["FECHA"].astype(str).str.split(" ").str[0]
             else:
                 df_consolidado_final = pd.DataFrame(columns=columnas_estructuradas)
                 
             df_conciliacion_resumen = pd.DataFrame(resumen_bancos)
             
-            tab1, tab2 = st.tabs(["📋 Nueva Hoja: Consolidado", "📊 Nueva Hoja: Conciliación (Métricas)"])
+            # Visualización en pestañas organizadas dentro de Streamlit
+            tab1, tab2 = st.tabs(["📋 Nueva Hoja: Consolidado (Información Real Unificada)", "📊 Nueva Hoja: Conciliación (Métricas)"])
             
             with tab1:
                 st.markdown(f"### 🗄️ Registros Consolidados Reales Extrayendo de las Hojas ({len(df_consolidado_final)} filas)")
+                st.write("A continuación se muestra la unificación y vaciado de los movimientos de todas las cuentas:")
                 st.dataframe(df_consolidado_final, use_container_width=True)
                 
             with tab2:
                 st.markdown("### 📊 Auditoría de Saldos Totales por Hoja")
                 st.dataframe(df_conciliacion_resumen, use_container_width=True)
                 
-            # Escritura segura utilizando el búfer io en memoria y el motor openpyxl
+            # Construcción y descarga del libro Excel finalizado
             buffer_gulf_salida = io.BytesIO()
             with pd.ExcelWriter(buffer_gulf_salida, engine='openpyxl') as writer:
+                # 1. Conservar intactas todas las pestañas originales
                 for name, df_orig in diccionario_hojas_originales.items():
                     df_orig.to_excel(writer, sheet_name=name, index=False)
+                
+                # 2. Insertar la hoja solicitada con la estructura y datos unificados
                 df_consolidado_final.to_excel(writer, sheet_name='Consolidado', index=False)
+                
+                # 3. Insertar hoja analítica de resumen de saldos
                 df_conciliacion_resumen.to_excel(writer, sheet_name='Conciliación', index=False)
                 
             st.write("---")
@@ -435,4 +465,51 @@ elif st.session_state.modulo_activo == "Diario":
     else:
         moneda_vista = st.radio("Presentar Libro Diario expresado en:", ["Bolívares (Moneda Legal)", "Dólares Americanos (USD)"], horizontal=True)
         if moneda_vista == "Dólares Americanos (USD)":
-            df_mostrar = df_diario
+            df_mostrar = df_diario[["ID_Asiento", "Fecha", "Código Cuenta", "Cuenta", "Descripción", "Debe_USD", "Haber_USD", "Tasa"]].copy()
+        else:
+            df_mostrar = df_diario[["ID_Asiento", "Fecha", "Código Cuenta", "Cuenta", "Descripción", "Debe_Bs", "Haber_Bs"]].copy()
+        st.dataframe(df_mostrar, use_container_width=True)
+
+# --- MÓDULO 3: LIBRO MAYOR ---
+elif st.session_state.modulo_activo == "Mayor":
+    st.header("🗂️ Libro Mayor Analítico - JAC Venezuela")
+    df_diario = st.session_state.contabilidad.copy()
+    
+    if df_diario.empty:
+        st.info("El Libro Mayor se encuentra vacío.")
+    else:
+        moneda_mayor = st.radio("Moneda de análisis:", ["Bolívares (Bs.)", "Dólares ($)"], horizontal=True)
+        for cuenta in df_diario["Cuenta"].unique():
+            st.markdown(f"📦 **Cuenta Analítica: {cuenta}**")
+            df_cuenta = df_diario[df_diario["Cuenta"] == cuenta]
+            st.dataframe(df_cuenta, use_container_width=True)
+
+# --- MÓDULO 4: BALANCE DE COMPROBACIÓN ---
+elif st.session_state.modulo_activo == "Comprobacion":
+    st.header("⚖️ Balance de Comprobación - JAC Venezuela")
+    df_diario = st.session_state.contabilidad.copy()
+    
+    if df_diario.empty:
+        st.info("No hay datos contables suficientes.")
+    else:
+        bal_comprobacion = df_diario.groupby(["Código Cuenta", "Cuenta"]).agg(
+            Total_Debe=('Debe_Bs', 'sum'),
+            Total_Haber=('Haber_Bs', 'sum')
+        ).reset_index()
+        st.dataframe(bal_comprobacion, use_container_width=True)
+
+# --- MÓDULO 5: ESTADO DE SITUACIÓN FINANCIERA ---
+elif st.session_state.modulo_activo == "Situacion":
+    st.header("📋 Estado de Situación Financiera - JAC Venezuela")
+    df_diario = st.session_state.contabilidad.copy()
+    
+    if df_diario.empty:
+        st.info("No existen saldos para computar cierres financieros.")
+    else:
+        saldos_globales = df_diario.groupby(["Código Cuenta", "Cuenta"]).agg(
+            D_bs=('Debe_Bs', 'sum'), H_bs=('Haber_Bs', 'sum')
+        ).reset_index()
+        saldos_globales["Saldo_Neto_Bs"] = saldos_globales["D_bs"] - saldos_globales["H_bs"]
+        
+        st.markdown("### Balance Unificado VEN-NIF")
+        st.dataframe(saldos_globales, use_container_width=True)

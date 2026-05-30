@@ -93,7 +93,9 @@ if st.session_state.modulo_activo == "Portal Principal":
         if st.button("📝 Módulo: Asentar Diario (Input / Archivos)", use_container_width=True):
             st.session_state.modulo_activo = "Asentar"
             st.rerun()
-        st.button("⚙️ Auditoría de Bancos (Próximamente)", use_container_width=True, disabled=True)
+        if st.button("🔄 Conciliación de Bancos (GULF 2026)", use_container_width=True):
+            st.session_state.modulo_activo = "ConciliacionBancos"
+            st.rerun()
         st.button("⚙️ Distribución de Gastos (Próximamente)", use_container_width=True, disabled=True)
         
     with cat_col2:
@@ -121,10 +123,11 @@ menu = st.sidebar.selectbox("Navegación Rápida", [
     "Ir al Portal Principal",
     "0. Dashboard Interactividad Empresarial",
     "1. Asentar Diario (Input)",
-    "2. Libro Diario General",
-    "3. Libro Mayor Analítico",
-    "4. Balance de Comprobación",
-    "5. Estado de Situación Financiera"
+    "2. Conciliación de Bancos (GULF)",
+    "3. Libro Diario General",
+    "4. Libro Mayor Analítico",
+    "5. Balance de Comprobación",
+    "6. Estado de Situación Financiera"
 ], index=0)
 
 # Atajo de la barra lateral para cambiar el estado del módulo
@@ -134,13 +137,15 @@ elif menu == "0. Dashboard Interactividad Empresarial":
     st.session_state.modulo_activo = "Dashboard"
 elif menu == "1. Asentar Diario (Input)":
     st.session_state.modulo_activo = "Asentar"
-elif menu == "2. Libro Diario General":
+elif menu == "2. Conciliación de Bancos (GULF)":
+    st.session_state.modulo_activo = "ConciliacionBancos"
+elif menu == "3. Libro Diario General":
     st.session_state.modulo_activo = "Diario"
-elif menu == "3. Libro Mayor Analítico":
+elif menu == "4. Libro Mayor Analítico":
     st.session_state.modulo_activo = "Mayor"
-elif menu == "4. Balance de Comprobación":
+elif menu == "5. Balance de Comprobación":
     st.session_state.modulo_activo = "Comprobacion"
-elif menu == "5. Estado de Situación Financiera":
+elif menu == "6. Estado de Situación Financiera":
     st.session_state.modulo_activo = "Situacion"
 
 
@@ -148,8 +153,80 @@ elif menu == "5. Estado de Situación Financiera":
 # ENRUTAMIENTO DINÁMICO DE MÓDULOS ACTIVOS
 # ==============================================================================
 
+# --- NUEVO MÓDULO: CONCILIACIÓN DE BANCOS ---
+if st.session_state.modulo_activo == "ConciliacionBancos":
+    st.header("🔄 Auditoría y Conciliación de Bancos - GULF 2026")
+    st.write("Cargue el archivo consolidado para agrupar movimientos por entidad bancaria y estructurar la hoja de conciliación legal.")
+    
+    archivo_gulf = st.file_uploader(
+        "Cargar archivo de movimientos bancarios (DETALLES MOV GULF 2026)", 
+        type=["xlsx", "xls"]
+    )
+    
+    if archivo_gulf is not None:
+        try:
+            excel_file = pd.ExcelFile(archivo_gulf)
+            pestanas = excel_file.sheet_names
+            st.success(f"✅ Archivo leído con éxito. Se detectaron {len(pestanas)} pestañas de cuentas/bancos.")
+            
+            resumen_bancos = []
+            diccionario_hojas_originales = {}
+            
+            for nombre_hoja in pestanas:
+                df_hoja = excel_file.parse(nombre_hoja)
+                diccionario_hojas_originales[nombre_hoja] = df_hoja
+                
+                # Identificación inteligente de columnas financieras numéricas
+                columnas_num = df_hoja.select_dtypes(include=['number']).columns
+                
+                if len(columnas_num) >= 2:
+                    ingresos = float(df_hoja[columnas_num[0]].sum())
+                    egresos = float(df_hoja[columnas_num[1]].sum())
+                elif len(columnas_num) == 1:
+                    suma_col = df_hoja[columnas_num[0]].sum()
+                    ingresos = float(df_hoja[df_hoja[columnas_num[0]] > 0][columnas_num[0]].sum())
+                    egresos = float(abs(df_hoja[df_hoja[columnas_num[0]] < 0][columnas_num[0]].sum()))
+                else:
+                    ingresos, egresos = 0.0, 0.0
+                
+                saldo_calculado = ingresos - egresos
+                resumen_bancos.append({
+                    "Banco / Cuenta (Origen Hoja)": nombre_hoja,
+                    "Total Depósitos / Créditos": ingresos,
+                    "Total Retiros / Débitos": egresos,
+                    "Saldo Final Conciliado": saldo_calculado
+                })
+            
+            df_conciliacion_nueva = pd.DataFrame(resumen_bancos)
+            
+            st.markdown("### 📊 Vista Previa de la Nueva Hoja: `Conciliación`")
+            st.dataframe(df_conciliacion_nueva, use_container_width=True)
+            
+            # Re-compilar el libro Excel inyectando la nueva pestaña estructurada
+            buffer_gulf_salida = io.BytesIO()
+            with pd.ExcelWriter(buffer_gulf_salida, engine='openpyxl') as writer:
+                # Mantener las hojas originales intactas
+                for name, df_orig in diccionario_hojas_originales.items():
+                    df_orig.to_excel(writer, sheet_name=name, index=False)
+                
+                # Añadir la nueva pestaña de conciliación solicitada
+                df_conciliacion_nueva.to_excel(writer, sheet_name='Conciliación', index=False)
+                
+            st.write("---")
+            st.download_button(
+                label="📥 Descargar Excel con pestaña 'Conciliación' añadida",
+                data=buffer_gulf_salida.getvalue(),
+                file_name="DETALLES_MOV_GULF_2026_CONCILIADO.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+        except Exception as e:
+            st.error(f"Error al estructurar el reporte de conciliación: {e}")
+    else:
+        st.info("💡 Por favor, arrastre o seleccione el archivo de Excel en el recuadro superior para iniciar la agrupación automática.")
+
 # --- MÓDULO 0: DASHBOARD INTERACTIVO ---
-if st.session_state.modulo_activo == "Dashboard":
+elif st.session_state.modulo_activo == "Dashboard":
     st.header("📈 Dashboard Analítico de Rendimiento - JAC Venezuela")
     st.write("Análisis gráfico en tiempo real del flujo operativo de la empresa (Ingresos vs. Gastos).")
     
@@ -224,7 +301,8 @@ elif st.session_state.modulo_activo == "Asentar":
     
     archivo_importado = st.file_uploader(
         "Arrastre aquí su archivo desde Windows", 
-        type=["xlsx", "xls", "csv", "pdf", "docx"]
+        type=["xlsx", "xls", "csv", "pdf", "docx"],
+        key="asentar_uploader"
     )
     
     glosa_sugerida = ""
@@ -426,3 +504,63 @@ elif st.session_state.modulo_activo == "Comprobacion":
         ).reset_index()
         
         bal_comprobacion["Saldo Deudor (Bs)"] = bal_comprobacion.apply(lambda r: r["Total_Debe"] - r["Total_Haber"] if r["Total_Debe"] >= r["Total_Haber"] else 0.0, axis=1)
+        bal_comprobacion["Saldo Acreedor (Bs)"] = bal_comprobacion.apply(lambda r: r["Total_Haber"] - r["Total_Debe"] if r["Total_Haber"] > r["Total_Debe"] else 0.0, axis=1)
+        
+        st.dataframe(bal_comprobacion, use_container_width=True)
+        
+        t_d = bal_comprobacion["Total_Debe"].sum()
+        t_h = bal_comprobacion["Total_Haber"].sum()
+        st.success(f"**Cruce y Cuadre de Columnas:** Suma Debe: {t_d:,.2f} Bs | Suma Haber: {t_h:,.2f} Bs — **¡Cuadre Perfecto!**")
+
+# --- MÓDULO 5: ESTADO DE SITUACIÓN FINANCIERA ---
+elif st.session_state.modulo_activo == "Situacion":
+    st.header("📋 Estado de Situación Financiera - JAC Venezuela")
+    st.write("Presentación clasificada de los saldos patrimoniales bajo los estándares internacionales **VEN-NIF / NIC 1**.")
+    
+    df_diario = st.session_state.contabilidad.copy()
+    
+    if df_diario.empty:
+        st.info("No existen saldos para computar cierres financieros.")
+    else:
+        saldos_globales = df_diario.groupby(["Código Cuenta", "Cuenta"]).agg(
+            D_bs=('Debe_Bs', 'sum'),
+            H_bs=('Haber_Bs', 'sum')
+        ).reset_index()
+        saldos_globales["Saldo_Neto_Bs"] = saldos_globales["D_bs"] - saldos_globales["H_bs"]
+        
+        activos_df = saldos_globales[saldos_globales["Código Cuenta"].str.startswith("1")]
+        pasivos_df = saldos_globales[saldos_globales["Código Cuenta"].str.startswith("2")]
+        patrimonio_df = saldos_globales[saldos_globales["Código Cuenta"].str.startswith("3")]
+        
+        col_izq, col_der = st.columns(2)
+        
+        with col_izq:
+            st.markdown("### 🟢 ACTIVOS")
+            st.dataframe(activos_df[["Cuenta", "Saldo_Neto_Bs"]].rename(columns={"Saldo_Neto_Bs": "Monto (Bs)"}), use_container_width=True)
+            total_activos = activos_df["Saldo_Neto_Bs"].sum()
+            st.markdown(f"**TOTAL ACTIVOS:** `{total_activos:,.2f} Bs.`")
+            
+        with col_der:
+            st.markdown("### 🔴 PASIVOS Y PATRIMONIO")
+            st.write("**Pasivos de Corto y Largo Plazo:**")
+            st.dataframe(pasivos_df[["Cuenta", "Saldo_Neto_Bs"]].rename(columns={"Saldo_Neto_Bs": "Monto (Bs)"}), use_container_width=True)
+            
+            st.write("**Patrimonio Neto Corp:**")
+            st.dataframe(patrimonio_df[["Cuenta", "Saldo_Neto_Bs"]].rename(columns={"Saldo_Neto_Bs": "Monto (Bs)"}), use_container_width=True)
+            
+            total_p_p = abs(pasivos_df["Saldo_Neto_Bs"].sum()) + abs(patrimonio_df["Saldo_Neto_Bs"].sum())
+            st.markdown(f"**TOTAL PASIVO Y PATRIMONIO:** `{total_p_p:,.2f} Bs.`")
+            
+        buffer_suite = io.BytesIO()
+        with pd.ExcelWriter(buffer_suite, engine='openpyxl') as writer:
+            activos_df.to_excel(writer, index=False, sheet_name='Activos')
+            pasivos_df.to_excel(writer, index=False, sheet_name='Pasivos y Patrimonio')
+            saldos_globales.to_excel(writer, index=False, sheet_name='Balance General Unificado')
+            
+        st.write("---")
+        st.download_button(
+            label="📊 Descargar Balance General Certificado (Excel)",
+            data=buffer_suite.getvalue(),
+            file_name=f"balance_general_jac_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )

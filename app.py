@@ -9,7 +9,7 @@ import pypdf
 import docx
 
 # Configuración de la página
-st.set_page_config(page_title="Portal de Herramientas Contables - Grupo Mayoreo", layout="wide", page_icon="🇻🇪")
+st.set_page_config(page_title="Portal de Herramientas Contables - Empresa JAC Venezuela", layout="wide", page_icon="🇻🇪")
 
 # Inicializar el estado de la sesión (Libro Mayor Auxiliar / Base de Datos)
 if 'contabilidad' not in st.session_state:
@@ -57,27 +57,52 @@ CATALOGO_CUENTAS = {
 # 🏢 DISEÑO INTERACTIVO DEL PORTAL DE BIENVENIDA (PANTALLA PRINCIPAL)
 # ==============================================================================
 
-# Encabezado simulando los logos corporativos del Grupo Mayoreo (Febeca, Beval, Sillaca)
+# Encabezado con los logos estilizados en base a la imagen provista (Esferas y Marcas)
+st.markdown("""
+<div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #1f77b4;">
+    <h1 style="margin: 0; color: #1a1a1a; font-size: 28px;">🇻🇪 Empresa JAC Venezuela</h1>
+    <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Consorcio de Soluciones Integrales y Distribución Nacional</p>
+</div>
+""", unsafe_allow_html=True)
+
 col_logo1, col_logo2, col_logo3 = st.columns(3)
 with col_logo1:
-    st.markdown("<h2 style='text-align: center; color: #1f77b4;'>🔵 febeca</h2><p style='text-align: center; font-size: 12px;'>mayor de ferretería</p>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style='text-align: center; padding: 10px;'>
+        <span style='display: inline-block; width: 40px; height: 40px; background: radial-gradient(circle at 30% 30%, #3498db, #1f77b4); border-radius: 50%; vertical-align: middle; margin-right: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.15);'></span>
+        <h2 style='display: inline; color: #1f77b4; font-family: sans-serif; vertical-align: middle;'>febeca</h2>
+        <p style='margin-top: 5px; font-size: 12px; color: #555; font-weight: bold;'>mayor de ferretería</p>
+    </div>
+    """, unsafe_allow_html=True)
 with col_logo2:
-    st.markdown("<h2 style='text-align: center; color: #8c564b;'>🟢 beval</h2><p style='text-align: center; font-size: 12px;'>mayor de repuestos</p>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style='text-align: center; padding: 10px;'>
+        <span style='display: inline-block; width: 40px; height: 40px; background: radial-gradient(circle at 30% 30%, #2ecc71, #27ae60); border-radius: 50%; vertical-align: middle; margin-right: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.15);'></span>
+        <h2 style='display: inline; color: #27ae60; font-family: sans-serif; vertical-align: middle;'>beval</h2>
+        <p style='margin-top: 5px; font-size: 12px; color: #555; font-weight: bold;'>mayor de repuestos</p>
+    </div>
+    """, unsafe_allow_html=True)
 with col_logo3:
-    st.markdown("<h2 style='text-align: center; color: #e377c2;'>🔴 sillaca</h2><p style='text-align: center; font-size: 12px;'>mayor de quincalla</p>", unsafe_allow_html=True)
+    st.markdown("""
+    <div style='text-align: center; padding: 10px;'>
+        <span style='display: inline-block; width: 40px; height: 40px; background: radial-gradient(circle at 30% 30%, #e74c3c, #c0392b); border-radius: 50%; vertical-align: middle; margin-right: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.15);'></span>
+        <h2 style='display: inline; color: #c0392b; font-family: sans-serif; vertical-align: middle;'>sillaca</h2>
+        <p style='margin-top: 5px; font-size: 12px; color: #555; font-weight: bold;'>mayor de quincalla</p>
+    </div>
+    """, unsafe_allow_html=True)
 
 st.write("---")
 
 # Si estamos dentro de algún módulo, habilitar el botón de retorno arriba
 if st.session_state.modulo_activo != "Portal Principal":
-    if st.button("⬅️ Cambiar de Grupo (Mayoreo / Cofersa) / Volver al Portal Principal"):
+    if st.button("⬅️ Volver al Portal de Herramientas Principal (JAC Venezuela)"):
         st.session_state.modulo_activo = "Portal Principal"
         st.rerun()
 
 # --- RENDERIZADO DEL PORTAL PRINCIPAL DE HERRAMIENTAS ---
 if st.session_state.modulo_activo == "Portal Principal":
-    st.markdown("## 🏛️ Portal de Herramientas: Grupo Mayoreo")
-    st.write("Seleccione una herramienta para comenzar:")
+    st.markdown("## 🏛️ Portal de Herramientas: Empresa JAC")
+    st.write("Seleccione una herramienta operativa para comenzar:")
     st.write("")
     
     # Grid de Categorías tipo Dashboard Corporativo
@@ -148,7 +173,7 @@ elif menu == "5. Estado de Situación Financiera":
 
 # --- MÓDULO 0: DASHBOARD INTERACTIVO ---
 if st.session_state.modulo_activo == "Dashboard":
-    st.header("📈 Dashboard Analítico de Rendimiento")
+    st.header("📈 Dashboard Analítico de Rendimiento - JAC Venezuela")
     st.write("Análisis gráfico en tiempo real del flujo operativo de la empresa (Ingresos vs. Gastos).")
     
     df_dashboard = st.session_state.contabilidad.copy()
@@ -214,7 +239,7 @@ if st.session_state.modulo_activo == "Dashboard":
 
 # --- MÓDULO 1: ASENTAR DIARIO ---
 elif st.session_state.modulo_activo == "Asentar":
-    st.header("📝 Registro de Asientos Contables (Partida Doble)")
+    st.header("📝 Registro de Asientos Contables (Partida Doble) - JAC Venezuela")
     st.write("Conforme al Artículo 34 del Código de Comercio, se deben asentar cronológicamente las operaciones indicando la cuenta deudora y acreedora.")
     
     st.markdown("### 📥 Asistente de Importación Inteligente (Excel, PDF, Word)")
@@ -289,7 +314,7 @@ elif st.session_state.modulo_activo == "Asentar":
     
     with st.form("form_asiento", clear_on_submit=True):
         fecha_asiento = st.date_input("Fecha de Registro Legal", datetime.now())
-        glosa_general = st.text_input("Concepto / Glosa del Asiento", value=glosa_sugerida, placeholder="Ej: Registro de ventas según factura fiscal N°...")
+        glosa_general = st.text_input("Concepto / Glosa del Asiento", value=glosa_sugerida, placeholder="Ej: Registro de ventas...")
         
         st.markdown("##### **Renglón 1: Cuenta de Cargo (DEBE)**")
         col1, col2, col3 = st.columns([2, 1, 1])
@@ -349,7 +374,7 @@ elif st.session_state.modulo_activo == "Asentar":
 
 # --- MÓDULO 2: LIBRO DIARIO GENERAL ---
 elif st.session_state.modulo_activo == "Diario":
-    st.header("📖 Libro Diario Obligatorio")
+    st.header("📖 Libro Diario Obligatorio - JAC Venezuela")
     st.write("Estructura legal exigida para la presentación ante tribunales de comercio o registros mercantiles.")
     
     df_diario = st.session_state.contabilidad.copy()
@@ -375,13 +400,13 @@ elif st.session_state.modulo_activo == "Diario":
         st.download_button(
             label="📊 Descargar Libro Diario Oficial (Excel)",
             data=buffer.getvalue(),
-            file_name=f"libro_diario_legal_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            file_name=f"libro_diario_jac_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
 
 # --- MÓDULO 3: LIBRO MAYOR ---
 elif st.session_state.modulo_activo == "Mayor":
-    st.header("🗂️ Libro Mayor Folio por Folio")
+    st.header("🗂️ Libro Mayor Folio por Folio - JAC Venezuela")
     st.write("Sintetiza los movimientos cargados al Debe y al Haber de cada cuenta de forma analítica.")
     
     df_diario = st.session_state.contabilidad.copy()
@@ -410,7 +435,7 @@ elif st.session_state.modulo_activo == "Mayor":
 
 # --- MÓDULO 4: BALANCE DE COMPROBACIÓN ---
 elif st.session_state.modulo_activo == "Comprobacion":
-    st.header("⚖️ Balance de Comprobación (Sumas y Saldos)")
+    st.header("⚖️ Balance de Comprobación - JAC Venezuela")
     st.write("Verificación técnica del principio de igualdad matemática en los libros contables.")
     
     df_diario = st.session_state.contabilidad.copy()
@@ -434,7 +459,7 @@ elif st.session_state.modulo_activo == "Comprobacion":
 
 # --- MÓDULO 5: ESTADO DE SITUACIÓN FINANCIERA ---
 elif st.session_state.modulo_activo == "Situacion":
-    st.header("📋 Estado de Situación Financiera (Balance General)")
+    st.header("📋 Estado de Situación Financiera - JAC Venezuela")
     st.write("Presentación clasificada de los saldos patrimoniales bajo los estándares internacionales **VEN-NIF / NIC 1**.")
     
     df_diario = st.session_state.contabilidad.copy()
@@ -481,6 +506,6 @@ elif st.session_state.modulo_activo == "Situacion":
         st.download_button(
             label="📊 Descargar Balance General Certificado (Excel)",
             data=buffer_suite.getvalue(),
-            file_name=f"balance_general_venezuela_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            file_name=f"balance_general_jac_{datetime.now().strftime('%Y%m%d')}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )

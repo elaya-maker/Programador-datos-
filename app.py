@@ -57,41 +57,13 @@ CATALOGO_CUENTAS = {
 # 🏢 DISEÑO INTERACTIVO DEL PORTAL DE BIENVENIDA (PANTALLA PRINCIPAL)
 # ==============================================================================
 
-# Encabezado con los logos estilizados en base a la imagen provista (Esferas y Marcas)
+# Encabezado exclusivo de la Empresa JAC Venezuela
 st.markdown("""
-<div style="background-color: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px; border-left: 5px solid #1f77b4;">
-    <h1 style="margin: 0; color: #1a1a1a; font-size: 28px;">🇻🇪 Empresa JAC Venezuela</h1>
-    <p style="margin: 5px 0 0 0; color: #666; font-size: 14px;">Consorcio de Soluciones Integrales y Distribución Nacional</p>
+<div style="background-color: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 25px; border-left: 6px solid #ff0000; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+    <h1 style="margin: 0; color: #1a1a1a; font-size: 32px; font-weight: bold; letter-spacing: 0.5px;">⭐ Empresa JAC Venezuela</h1>
+    <p style="margin: 5px 0 0 0; color: #555; font-size: 15px;">Consorcio Automotriz y Operaciones de Distribución Nacional</p>
 </div>
 """, unsafe_allow_html=True)
-
-col_logo1, col_logo2, col_logo3 = st.columns(3)
-with col_logo1:
-    st.markdown("""
-    <div style='text-align: center; padding: 10px;'>
-        <span style='display: inline-block; width: 40px; height: 40px; background: radial-gradient(circle at 30% 30%, #3498db, #1f77b4); border-radius: 50%; vertical-align: middle; margin-right: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.15);'></span>
-        <h2 style='display: inline; color: #1f77b4; font-family: sans-serif; vertical-align: middle;'>febeca</h2>
-        <p style='margin-top: 5px; font-size: 12px; color: #555; font-weight: bold;'>mayor de ferretería</p>
-    </div>
-    """, unsafe_allow_html=True)
-with col_logo2:
-    st.markdown("""
-    <div style='text-align: center; padding: 10px;'>
-        <span style='display: inline-block; width: 40px; height: 40px; background: radial-gradient(circle at 30% 30%, #2ecc71, #27ae60); border-radius: 50%; vertical-align: middle; margin-right: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.15);'></span>
-        <h2 style='display: inline; color: #27ae60; font-family: sans-serif; vertical-align: middle;'>beval</h2>
-        <p style='margin-top: 5px; font-size: 12px; color: #555; font-weight: bold;'>mayor de repuestos</p>
-    </div>
-    """, unsafe_allow_html=True)
-with col_logo3:
-    st.markdown("""
-    <div style='text-align: center; padding: 10px;'>
-        <span style='display: inline-block; width: 40px; height: 40px; background: radial-gradient(circle at 30% 30%, #e74c3c, #c0392b); border-radius: 50%; vertical-align: middle; margin-right: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.15);'></span>
-        <h2 style='display: inline; color: #c0392b; font-family: sans-serif; vertical-align: middle;'>sillaca</h2>
-        <p style='margin-top: 5px; font-size: 12px; color: #555; font-weight: bold;'>mayor de quincalla</p>
-    </div>
-    """, unsafe_allow_html=True)
-
-st.write("---")
 
 # Si estamos dentro de algún módulo, habilitar el botón de retorno arriba
 if st.session_state.modulo_activo != "Portal Principal":
@@ -101,15 +73,15 @@ if st.session_state.modulo_activo != "Portal Principal":
 
 # --- RENDERIZADO DEL PORTAL PRINCIPAL DE HERRAMIENTAS ---
 if st.session_state.modulo_activo == "Portal Principal":
-    st.markdown("## 🏛️ Portal de Herramientas: Empresa JAC")
-    st.write("Seleccione una herramienta operativa para comenzar:")
+    st.markdown("### 🏛️ Portal de Herramientas Operativas")
+    st.write("Seleccione el módulo contable o fiscal que desea gestionar:")
     st.write("")
     
-    # Grid de Categorías tipo Dashboard Corporativo
+    # Grid de Categorías con columnas de herramientas estructuradas
     cat_col1, cat_col2, cat_col3 = st.columns(3)
     
     with cat_col1:
-        st.markdown("### 📊 Análisis y Conciliación")
+        st.markdown("#### 📊 Análisis y Conciliación")
         if st.button("📈 Dashboard Analítico Empresarial", use_container_width=True):
             st.session_state.modulo_activo = "Dashboard"
             st.rerun()
@@ -120,7 +92,7 @@ if st.session_state.modulo_activo == "Portal Principal":
         st.button("⚙️ Distribución de Gastos (Próximamente)", use_container_width=True, disabled=True)
         
     with cat_col2:
-        st.markdown("### 📋 Cierres Mensuales")
+        st.markdown("#### 📋 Cierres Mensuales")
         if st.button("📖 Ver Libro Diario General", use_container_width=True):
             st.session_state.modulo_activo = "Diario"
             st.rerun()
@@ -132,7 +104,7 @@ if st.session_state.modulo_activo == "Portal Principal":
             st.rerun()
             
     with cat_col3:
-        st.markdown("### ⚙️ Procesos Fiscales")
+        st.markdown("#### ⚙️ Procesos Fiscales")
         if st.button("📋 Estado de Situación Financiera (VEN-NIF)", use_container_width=True):
             st.session_state.modulo_activo = "Situacion"
             st.rerun()
@@ -152,7 +124,7 @@ menu = st.sidebar.selectbox("Navegación Rápida", [
 
 # Atajo de la barra lateral para cambiar el estado del módulo
 if menu == "Ir al Portal Principal":
-    pass  # Deja que actúe el estado interno
+    pass  
 elif menu == "0. Dashboard Interactividad Empresarial":
     st.session_state.modulo_activo = "Dashboard"
 elif menu == "1. Asentar Diario (Input)":

@@ -4,4 +4,4 @@ plotly
 openpyxl
 pypdf
 python-docx
-pip install streamlit pandas openpyxl
+

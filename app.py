@@ -57,24 +57,29 @@ CATALOGO_CUENTAS = {
 # 🏢 DISEÑO INTERACTIVO DEL PORTAL DE BIENVENIDA (PANTALLA PRINCIPAL)
 # ==============================================================================
 
-# Encabezado exclusivo de la Empresa JAC Venezuela
+# Encabezado exclusivo de la Empresa JAC Venezuela con representación estilizada del logo vectorial
 st.markdown("""
-<div style="background-color: #f8f9fa; padding: 25px; border-radius: 10px; margin-bottom: 25px; border-left: 6px solid #ff0000; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
-    <h1 style="margin: 0; color: #1a1a1a; font-size: 32px; font-weight: bold; letter-spacing: 0.5px;">⭐ Empresa JAC Venezuela</h1>
-    <p style="margin: 5px 0 0 0; color: #555; font-size: 15px;">Consorcio Automotriz y Operaciones de Distribución Nacional</p>
+<div style="background-color: #000000; padding: 25px; border-radius: 12px; margin-bottom: 25px; border-left: 8px solid #ff0000; box-shadow: 0 4px 10px rgba(0,0,0,0.15); display: flex; align-items: center;">
+    <div style="margin-right: 25px; border-right: 2px solid #333; padding-right: 25px;">
+        <span style="font-family: 'Arial Black', Gadget, sans-serif; font-size: 42px; font-weight: 900; color: #FFFFFF; letter-spacing: -3px; font-style: italic;">JAC</span>
+    </div>
+    <div>
+        <h1 style="margin: 0; color: #FFFFFF; font-size: 30px; font-weight: bold; font-family: sans-serif;">Empresa JAC Venezuela</h1>
+        <p style="margin: 4px 0 0 0; color: #aaaaaa; font-size: 14px; letter-spacing: 0.5px;">CONSORCIO AUTOMOTRIZ · SISTEMA DE CONTROL DE HERRAMIENTAS CONTABLES</p>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
 # Si estamos dentro de algún módulo, habilitar el botón de retorno arriba
 if st.session_state.modulo_activo != "Portal Principal":
-    if st.button("⬅️ Volver al Portal de Herramientas Principal (JAC Venezuela)"):
+    if st.button("⬅️ Volver al Menú Principal (JAC Venezuela)"):
         st.session_state.modulo_activo = "Portal Principal"
         st.rerun()
 
 # --- RENDERIZADO DEL PORTAL PRINCIPAL DE HERRAMIENTAS ---
 if st.session_state.modulo_activo == "Portal Principal":
-    st.markdown("### 🏛️ Portal de Herramientas Operativas")
-    st.write("Seleccione el módulo contable o fiscal que desea gestionar:")
+    st.markdown("### 🏛️ Distribución General de Módulos")
+    st.write("Seleccione la dimensión operativa contable o fiscal que desea ejecutar en este momento:")
     st.write("")
     
     # Grid de Categorías con columnas de herramientas estructuradas
@@ -401,83 +406,4 @@ elif st.session_state.modulo_activo == "Mayor":
             else:
                 df_c_vista = df_cuenta[["Fecha", "ID_Asiento", "Descripción", "Debe_USD", "Haber_USD"]]
                 saldo_neto = df_c_vista["Debe_USD"].sum() - df_c_vista["Haber_USD"].sum()
-                st.dataframe(df_c_vista.rename(columns={"Debe_USD": "Debe ($)", "Haber_USD": "Haber ($)"}), use_container_width=True)
-                st.markdown(f"**Saldo de Cuenta:** `$ {saldo_neto:,.2f}`")
-            st.write("---")
-
-# --- MÓDULO 4: BALANCE DE COMPROBACIÓN ---
-elif st.session_state.modulo_activo == "Comprobacion":
-    st.header("⚖️ Balance de Comprobación - JAC Venezuela")
-    st.write("Verificación técnica del principio de igualdad matemática en los libros contables.")
-    
-    df_diario = st.session_state.contabilidad.copy()
-    
-    if df_diario.empty:
-        st.info("No hay datos contables suficientes.")
-    else:
-        bal_comprobacion = df_diario.groupby(["Código Cuenta", "Cuenta"]).agg(
-            Total_Debe=('Debe_Bs', 'sum'),
-            Total_Haber=('Haber_Bs', 'sum')
-        ).reset_index()
-        
-        bal_comprobacion["Saldo Deudor (Bs)"] = bal_comprobacion.apply(lambda r: r["Total_Debe"] - r["Total_Haber"] if r["Total_Debe"] >= r["Total_Haber"] else 0.0, axis=1)
-        bal_comprobacion["Saldo Acreedor (Bs)"] = bal_comprobacion.apply(lambda r: r["Total_Haber"] - r["Total_Debe"] if r["Total_Haber"] > r["Total_Debe"] else 0.0, axis=1)
-        
-        st.dataframe(bal_comprobacion, use_container_width=True)
-        
-        t_d = bal_comprobacion["Total_Debe"].sum()
-        t_h = bal_comprobacion["Total_Haber"].sum()
-        st.success(f"**Cruce y Cuadre de Columnas:** Suma Debe: {t_d:,.2f} Bs | Suma Haber: {t_h:,.2f} Bs — **¡Cuadre Perfecto!**")
-
-# --- MÓDULO 5: ESTADO DE SITUACIÓN FINANCIERA ---
-elif st.session_state.modulo_activo == "Situacion":
-    st.header("📋 Estado de Situación Financiera - JAC Venezuela")
-    st.write("Presentación clasificada de los saldos patrimoniales bajo los estándares internacionales **VEN-NIF / NIC 1**.")
-    
-    df_diario = st.session_state.contabilidad.copy()
-    
-    if df_diario.empty:
-        st.info("No existen saldos para computar cierres financieros.")
-    else:
-        saldos_globales = df_diario.groupby(["Código Cuenta", "Cuenta"]).agg(
-            D_bs=('Debe_Bs', 'sum'),
-            H_bs=('Haber_Bs', 'sum')
-        ).reset_index()
-        saldos_globales["Saldo_Neto_Bs"] = saldos_globales["D_bs"] - saldos_globales["H_bs"]
-        
-        activos_df = saldos_globales[saldos_globales["Código Cuenta"].str.startswith("1")]
-        pasivos_df = saldos_globales[saldos_globales["Código Cuenta"].str.startswith("2")]
-        patrimonio_df = saldos_globales[saldos_globales["Código Cuenta"].str.startswith("3")]
-        
-        col_izq, col_der = st.columns(2)
-        
-        with col_izq:
-            st.markdown("### 🟢 ACTIVOS")
-            st.dataframe(activos_df[["Cuenta", "Saldo_Neto_Bs"]].rename(columns={"Saldo_Neto_Bs": "Monto (Bs)"}), use_container_width=True)
-            total_activos = activos_df["Saldo_Neto_Bs"].sum()
-            st.markdown(f"**TOTAL ACTIVOS:** `{total_activos:,.2f} Bs.`")
-            
-        with col_der:
-            st.markdown("### 🔴 PASIVOS Y PATRIMONIO")
-            st.write("**Pasivos de Corto y Largo Plazo:**")
-            st.dataframe(pasivos_df[["Cuenta", "Saldo_Neto_Bs"]].rename(columns={"Saldo_Neto_Bs": "Monto (Bs)"}), use_container_width=True)
-            
-            st.write("**Patrimonio Neto Corp:**")
-            st.dataframe(patrimonio_df[["Cuenta", "Saldo_Neto_Bs"]].rename(columns={"Saldo_Neto_Bs": "Monto (Bs)"}), use_container_width=True)
-            
-            total_p_p = abs(pasivos_df["Saldo_Neto_Bs"].sum()) + abs(patrimonio_df["Saldo_Neto_Bs"].sum())
-            st.markdown(f"**TOTAL PASIVO Y PATRIMONIO:** `{total_p_p:,.2f} Bs.`")
-            
-        buffer_suite = io.BytesIO()
-        with pd.ExcelWriter(buffer_suite, engine='openpyxl') as writer:
-            activos_df.to_excel(writer, index=False, sheet_name='Activos')
-            pasivos_df.to_excel(writer, index=False, sheet_name='Pasivos y Patrimonio')
-            saldos_globales.to_excel(writer, index=False, sheet_name='Balance General Unificado')
-            
-        st.write("---")
-        st.download_button(
-            label="📊 Descargar Balance General Certificado (Excel)",
-            data=buffer_suite.getvalue(),
-            file_name=f"balance_general_jac_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
+                st.dataframe(df_c_vista.rename(columns={"Debe_

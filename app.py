@@ -241,7 +241,8 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                 # Validar registros con fechas reales, eliminar líneas vacías o residuos texturizados
                 df_mapeado = df_mapeado[
                     df_mapeado["FECHA"].notna() & 
-                    (df_mapeado["FECHA"].astype(str).str.strip() != "")
+                    (df_mapeado["FECHA"].astype(str).str.strip() != "") &
+                    (df_mapeado["FECHA"].astype(str).str.upper().str.strip() != "NAN")
                 ]
                 
                 # Excluir filas repetitivas o estáticas de "SALDO INICIAL" o "SALDO ANTERIOR" para evitar duplicaciones
@@ -257,9 +258,11 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                 for col_m in columnas_moneda:
                     df_mapeado[col_m] = pd.to_numeric(df_mapeado[col_m], errors='coerce').fillna(0.0)
                 
-                # Incluir la información solo si contiene movimientos operativos reales
-                if not df_mapeado.empty:
-                    lista_movimientos_consolidados.append(df_mapeado)
+                # ➡️ [CORRECCIÓN CRÍTICA]: Evita procesar o inyectar hojas que no tengan transacciones válidas mapeadas
+                if df_mapeado.empty or len(df_mapeado) == 0:
+                    continue
+                
+                lista_movimientos_consolidados.append(df_mapeado)
                 
                 # Sumatorias analíticas del Banco evaluado
                 total_debito_bs = float(df_mapeado["DEBITO"].sum())
@@ -282,6 +285,13 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
                 df_consolidado_final = pd.concat(lista_movimientos_consolidados, ignore_index=True)
                 # Formatear la estampa temporal para visualización limpia YYYY-MM-DD
                 df_consolidado_final["FECHA"] = df_consolidado_final["FECHA"].astype(str).str.split(" ").str[0]
+                
+                # ➡️ [CORRECCIÓN CRÍTICA]: Asegurar que no queden valores NaN sueltos en ninguna columna de texto u objeto antes de exportar
+                for col in df_consolidado_final.columns:
+                    if col in columnas_moneda:
+                        df_consolidado_final[col] = pd.to_numeric(df_consolidado_final[col], errors='coerce').fillna(0.0)
+                    else:
+                        df_consolidado_final[col] = df_consolidado_final[col].fillna("").astype(str)
             else:
                 df_consolidado_final = pd.DataFrame(columns=columnas_estructuradas)
                 
@@ -382,7 +392,7 @@ elif st.session_state.modulo_activo == "Asentar":
                 if len(columnas_numericas) > 0:
                     monto_sugerido = float(df_ext[columnas_numericas[0]].iloc[0])
                 glosa_sugerida = f"Importación de datos desde archivo: {nombre_archivo}"
-                st.success("✅ Archivo tabular procesado.")
+                st.success("✅ Archivo tabular processed.")
             except Exception as e:
                 st.error(f"Error leyendo archivo tabular: {e}")
                 

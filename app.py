@@ -147,10 +147,10 @@ elif menu == "6. Estado de Situación Financiera":
 # ENRUTAMIENTO DINÁMICO DE MÓDULOS OPERATIVOS
 # ==============================================================================
 
-# --- MÓDULO ACTUALIZADO: CONCILIACIÓN Y CONSOLIDADO DE BANCOS (DETALLES MOV GULF 2026) ---
+# --- MÓDULO CONSOLIDADO EXTRACCIÓN REAL: CONCILIACIÓN Y CONSOLIDADO DE BANCOS ---
 if st.session_state.modulo_activo == "ConciliacionBancos":
     st.header("🔄 Auditoría, Conciliación y Consolidado de Bancos - GULF 2026")
-    st.write("Cargue el archivo de movimientos de Windows para agrupar las cuentas y estructurar la pestaña analítica unificada.")
+    st.write("Cargue el archivo original. El sistema extraerá de forma automática la información real de cada hoja mapeando dinámicamente sus columnas.")
     
     archivo_gulf = st.file_uploader(
         "Cargar archivo de movimientos bancarios (DETALLES MOV GULF 2026)", 
@@ -161,9 +161,9 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
         try:
             excel_file = pd.ExcelFile(archivo_gulf)
             pestanas = excel_file.sheet_names
-            st.success(f"✅ Archivo leído correctamente. Se detectaron {len(pestanas)} pestañas originales.")
+            st.success(f"✅ Archivo leído correctamente. Se detectaron {len(pestanas)} pestañas para procesar.")
             
-            # Definición estricta de las columnas solicitadas basadas en la imagen provista
+            # Estructura unificada estricta solicitada de acuerdo con la imagen
             columnas_estructuradas = [
                 "BANCOS/CAJA", "FECHA", "REFERENCIA", "DESCRIPCION BANCO", 
                 "Columna1", "DEBITO", "CREDITO", "SALDO", "TASA", 
@@ -175,91 +175,155 @@ if st.session_state.modulo_activo == "ConciliacionBancos":
             resumen_bancos = []
             
             for nombre_hoja in pestanas:
-                # Saltar si por un proceso previo ya existen pestañas con estos nombres
+                # Omitir hojas de reportes previos calculados si ya existieran en el libro
                 if nombre_hoja in ["Consolidado", "Conciliación"]:
                     continue
-                    
+                
+                # Leer hoja original completa
                 df_hoja = excel_file.parse(nombre_hoja)
                 diccionario_hojas_originales[nombre_hoja] = df_hoja
                 
-                # Normalización y mapeo inteligente de columnas según la captura visual
-                df_normalizado = pd.DataFrame(columns=columnas_estructuradas)
+                # Limpieza de filas vacías o desplazamientos de cabeceras en blanco de Excel
+                df_hoja = df_hoja.dropna(how='all').reset_index(drop=True)
+                if df_hoja.empty:
+                    continue
                 
-                # Si la hoja tiene datos, se asocian o se rellenan con vacíos correspondientes
-                for col in columnas_estructuradas:
-                    if col in df_hoja.columns:
-                        df_normalizado[col] = df_hoja[col]
-                    elif col == "BANCOS/CAJA":
-                        df_normalizado[col] = nombre_hoja  # Agrupación e identificación por Banco
+                # Normalizar los nombres de columnas de la pestaña original (quitar espacios y mayúsculas)
+                columnas_originales = [str(c).strip().upper() for c in df_hoja.columns]
+                
+                # Manejar situaciones donde la cabecera real está en la segunda o tercera fila (ej. Mercantil No Fiscal o Efectivo)
+                if "FECHA" not in columnas_originales and len(df_hoja) > 1:
+                    for i_row in range(min(3, len(df_hoja))):
+                        posible_cabecera = [str(c).strip().upper() for c in df_hoja.iloc[i_row]]
+                        if "FECHA" in posible_cabecera or "FECHA " in posible_cabecera:
+                            df_hoja.columns = [str(c).strip() for c in df_hoja.iloc[i_row]]
+                            df_hoja = df_hoja.iloc[i_row + 1:].reset_index(drop=True)
+                            columnas_originales = [str(c).strip().upper() for c in df_hoja.columns]
+                            break
+                
+                # Crear el DataFrame destino con el mismo tamaño de filas que el origen
+                df_mapeado = pd.DataFrame(index=df_hoja.index, columns=columnas_estructuradas)
+                df_mapeado["BANCOS/CAJA"] = nombre_hoja
+                
+                # --- DICCIONARIO DE CORRESPONDENCIAS PARA HOMOLOGACIÓN DE COLUMNAS REALES ---
+                mapa_columnas = {
+                    "FECHA": ["FECHA", "FECHA ", "FECHAS"],
+                    "REFERENCIA": ["REFERENCIA", "REFERENCIA ", "CONCEPTO", "NRO. REF", "NRO DE REFERENCIA"],
+                    "DESCRIPCION BANCO": ["DESCRIPCION", "DESCRIPCION ", "DESCRIPCION BANCO", "CONCEPTO"],
+                    "Columna1": ["COLUMNA1", "COLUMNA 1", "DETALLE", "TIPO TRAN.","CLASSIFICACION"],
+                    "DEBITO": ["DEBITO", "DEBITOS", "EGRESOS", "EGRESO", "PRESTAMO KTSU A GULF"],
+                    "CREDITO": ["CREDITO", "CREDITOS", "INGRESOS", "INGRESO", "PRESTAMO GULF A KTSU"],
+                    "SALDO": ["SALDO", "SALDOS", "DISPONIBLE", "DEUDA"],
+                    "TASA": ["TASA", "TASA CAMBIO", "VARIACION"],
+                    "DEBITO $": ["DEBITO $", "DEBITOS $", "EGRESOS $", "EGRESO $"],
+                    "CREDITO $": ["CREDITO $", "CREDITOS $", "INGRESOS $", "INGRESO $"],
+                    "SALDO $": ["SALDO $", "SALDOS $", "DISPONIBLE $"]
+                }
+                
+                # Mapear datos comparando las variantes semánticas de cada columna
+                for col_destino, variantes in mapa_columnas.items():
+                    columna_encontrada = None
+                    for col_origen in df_hoja.columns:
+                        if str(col_origen).strip().upper() in variantes:
+                            columna_encontrada = col_origen
+                            break
+                    
+                    if columna_encontrada is not None:
+                        df_mapeado[col_destino] = df_hoja[columna_encontrada]
                     else:
-                        if "SALDO" in col or "TASA" in col or "DEBITO" in col or "CREDITO" in col:
-                            df_normalizado[col] = 0.0
+                        if any(x in col_destino for x in ["DEBITO", "CREDITO", "SALDO", "TASA"]):
+                            df_mapeado[col_destino] = 0.0
                         else:
-                            df_normalizado[col] = ""
+                            df_mapeado[col_destino] = ""
                 
-                # Asegurar tipos numéricos para las sumatorias contables
-                for c_num in ["DEBITO", "CREDITO", "DEBITO $", "CREDITO $"]:
-                    df_normalizado[c_num] = pd.to_numeric(df_normalizado[c_num], errors='coerce').fillna(0.0)
+                # --- SANEAMIENTO Y LIMPIEZA CONTABLE DE FILAS ---
+                # Validar registros con fechas reales, eliminar líneas vacías o residuos texturizados
+                df_mapeado = df_mapeado[
+                    df_mapeado["FECHA"].notna() & 
+                    (df_mapeado["FECHA"].astype(str).str.strip() != "")
+                ]
                 
-                # Añadir al acumulador del consolidado global
-                lista_movimientos_consolidados.append(df_normalizado)
+                # Excluir filas repetitivas o estáticas de "SALDO INICIAL" o "SALDO ANTERIOR" para evitar duplicaciones
+                df_mapeado = df_mapeado[
+                    ~df_mapeado["DESCRIPCION BANCO"].astype(str).str.upper().str.contains("SALDO INICIAL", na=False)
+                ]
+                df_mapeado = df_mapeado[
+                    ~df_mapeado["DESCRIPCION BANCO"].astype(str).str.upper().str.contains("SALDO ANTERIOR", na=False)
+                ]
                 
-                # Calcular métricas para la hoja de conciliación resumida
-                total_debito_bs = float(df_normalizado["DEBITO"].sum())
-                total_credito_bs = float(df_normalizado["CREDITO"].sum())
-                total_debito_usd = float(df_normalizado["DEBITO $"].sum())
-                total_credito_usd = float(df_normalizado["CREDITO $"].sum())
+                # Forzar conversión a flotantes numéricos limpios para columnas monetarias
+                columnas_moneda = ["DEBITO", "CREDITO", "SALDO", "TASA", "DEBITO $", "CREDITO $", "SALDO $"]
+                for col_m in columnas_moneda:
+                    df_mapeado[col_m] = pd.to_numeric(df_mapeado[col_m], errors='coerce').fillna(0.0)
+                
+                # Incluir la información solo si contiene movimientos operativos reales
+                if not df_mapeado.empty:
+                    lista_movimientos_consolidados.append(df_mapeado)
+                
+                # Sumatorias analíticas del Banco evaluado
+                total_debito_bs = float(df_mapeado["DEBITO"].sum())
+                total_credito_bs = float(df_mapeado["CREDITO"].sum())
+                total_debito_usd = float(df_mapeado["DEBITO $"].sum())
+                total_credito_usd = float(df_mapeado["CREDITO $"].sum())
                 
                 resumen_bancos.append({
                     "Banco / Cuenta": nombre_hoja,
                     "Total Débitos (Bs)": total_debito_bs,
                     "Total Créditos (Bs)": total_credito_bs,
-                    "Saldo Final (Bs)": total_debito_bs - total_credito_bs,
+                    "Saldo Neto Movimientos (Bs)": total_debito_bs - total_credito_bs,
                     "Total Débitos ($)": total_debito_usd,
                     "Total Créditos ($)": total_credito_usd,
-                    "Saldo Final ($)": total_debito_usd - total_credito_usd
+                    "Saldo Neto Movimientos ($)": total_debito_usd - total_credito_usd
                 })
             
-            # Construcción final de los DataFrames requeridos
-            df_consolidado_final = pd.concat(lista_movimientos_consolidados, ignore_index=True) if lista_movimientos_consolidados else pd.DataFrame(columns=columnas_estructuradas)
+            # --- COMPILACIÓN FINAL DEL CONSOLIDADO OPERATIVO ---
+            if lista_movimientos_consolidados:
+                df_consolidado_final = pd.concat(lista_movimientos_consolidados, ignore_index=True)
+                # Formatear la estampa temporal para visualización limpia YYYY-MM-DD
+                df_consolidado_final["FECHA"] = df_consolidado_final["FECHA"].astype(str).str.split(" ").str[0]
+            else:
+                df_consolidado_final = pd.DataFrame(columns=columnas_estructuradas)
+                
             df_conciliacion_resumen = pd.DataFrame(resumen_bancos)
             
-            # Pestañas visuales de control en Streamlit
-            tab1, tab2 = st.tabs(["📋 Nueva Hoja: Consolidado (Estructurado)", "📊 Nueva Hoja: Conciliación"])
+            # Visualización en pestañas organizadas dentro de Streamlit
+            tab1, tab2 = st.tabs(["📋 Nueva Hoja: Consolidado (Información Real Unificada)", "📊 Nueva Hoja: Conciliación (Métricas)"])
             
             with tab1:
-                st.markdown("### Estructura de Columnas Unificadas por Banco")
+                st.markdown(f"### 🗄️ Registros Consolidados Reales Extrayendo de las Hojas ({len(df_consolidado_final)} filas)")
+                st.write("A continuación se muestra la unificación y vaciado de los movimientos de todas las cuentas:")
                 st.dataframe(df_consolidado_final, use_container_width=True)
                 
             with tab2:
-                st.markdown("### Resumen de Saldos Agrupados")
+                st.markdown("### 📊 Auditoría de Saldos Totales por Hoja")
                 st.dataframe(df_conciliacion_resumen, use_container_width=True)
                 
-            # Compilación e inyección de hojas nuevas en el libro de salida Excel
+            # Construcción y descarga del libro Excel finalizado
             buffer_gulf_salida = io.BytesIO()
             with pd.ExcelWriter(buffer_gulf_salida, engine='openpyxl') as writer:
-                # 1. Conservar intactas todas las hojas de datos originales de Windows
+                # 1. Conservar intactas todas las pestañas originales
                 for name, df_orig in diccionario_hojas_originales.items():
                     df_orig.to_excel(writer, sheet_name=name, index=False)
                 
-                # 2. Agregar la nueva pestaña 'Consolidado' con la estructura de la imagen
+                # 2. Insertar la hoja solicitada con la estructura y datos unificados
                 df_consolidado_final.to_excel(writer, sheet_name='Consolidado', index=False)
                 
-                # 3. Agregar la pestaña 'Conciliación' solicitada anteriormente
+                # 3. Insertar hoja analítica de resumen de saldos
                 df_conciliacion_resumen.to_excel(writer, sheet_name='Conciliación', index=False)
                 
             st.write("---")
             st.download_button(
-                label="📥 Descargar Excel con Hojas 'Consolidado' y 'Conciliación' Añadidas",
+                label="📥 Descargar Excel con Hojas 'Consolidado' y 'Conciliación' Generadas",
                 data=buffer_gulf_salida.getvalue(),
-                file_name="DETALLES_MOV_GULF_2026_PROCESADO.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                file_name="DETALLES_MOV_GULF_2026_CONSOLIDADO.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True
             )
             
         except Exception as e:
-            st.error(f"Error procesando la estructura del archivo bancario: {e}")
+            st.error(f"❌ Error al consolidar las estructuras del archivo de Excel: {e}")
     else:
-        st.info("💡 Suba el archivo de Excel en el control superior para generar las nuevas estructuras.")
+        st.info("💡 Por favor, cargue el archivo de Excel en el panel superior para procesar la extracción analítica.")
 
 # --- MÓDULO 0: DASHBOARD INTERACTIVO ---
 elif st.session_state.modulo_activo == "Dashboard":

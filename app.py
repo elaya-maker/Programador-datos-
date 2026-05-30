@@ -9,14 +9,18 @@ import pypdf
 import docx
 
 # Configuración de la página
-st.set_page_config(page_title="Sistema Contable Venezolano VEN-NIF", layout="wide", page_icon="🇻🇪")
+st.set_page_config(page_title="Portal de Herramientas Contables - Grupo Mayoreo", layout="wide", page_icon="🇻🇪")
 
-# Inicializar el estado de la sesión (Simulación de Libro Mayor Auxiliar/Base de Datos)
+# Inicializar el estado de la sesión (Libro Mayor Auxiliar / Base de Datos)
 if 'contabilidad' not in st.session_state:
     st.session_state.contabilidad = pd.DataFrame(columns=[
         "ID_Asiento", "Fecha", "Código Cuenta", "Cuenta", "Descripción", 
         "Debe_Bs", "Haber_Bs", "Debe_USD", "Haber_USD", "Tasa"
     ])
+
+# Inicializar estado para el módulo activo (Control de navegación por botones en pantalla)
+if 'modulo_activo' not in st.session_state:
+    st.session_state.modulo_activo = "Portal Principal"
 
 # --- MARCO REGULATORIO VENEZOLANO (BARRA LATERAL) ---
 st.sidebar.markdown("### 📜 Marco Regulatorio (VEN-NIF)")
@@ -26,23 +30,12 @@ st.sidebar.caption(
     "(Arts. 32 al 44 sobre obligatoriedad de libros) y las directrices de facturación y "
     "retenciones del **SENIAT**. Soporta registros bimonetarios según el Convenio Cambiario N° 1 del BCV."
 )
-
 st.sidebar.write("---")
-
-# 🎛️ MENÚ DESPLEGABLE DE NAVEGACIÓN PRINCIPAL
-menu = st.sidebar.selectbox("Módulos del Sistema", [
-    "0. Dashboard Interactividad Empresarial",
-    "1. Asentar Diario (Input)",
-    "2. Libro Diario General",
-    "3. Libro Mayor Analítico",
-    "4. Balance de Comprobación",
-    "5. Estado de Situación Financiera"
-])
 
 # Control de Tasa Oficial según regulaciones del BCV en la barra lateral
 tasa_bcv = st.sidebar.number_input("Tasa Oficial BCV del día (Bs/$)", min_value=1.0, value=60.0, step=0.01, format="%.2f")
 
-# Catálogo de Cuentas estandarizado (Estructura jerárquica)
+# Catálogo de Cuentas estandarizado
 CATALOGO_CUENTAS = {
     "1.1.01.01": "Efectivo en Caja y Bancos (Bs)",
     "1.1.01.02": "Efectivo en Caja y Bancos ($)",
@@ -59,18 +52,102 @@ CATALOGO_CUENTAS = {
     "5.2.01.02": "Gastos de Alquiler y Servicios"
 }
 
-# --- TÍTULO PRINCIPAL DE LA PANTALLA ---
-st.title("🇻🇪 Sistema de Automatización Contable Venezolano")
-st.markdown("##### Cumplimiento de Principios VEN-NIF (Pymes / GE) • Doble Columna (Debe/Haber) • Multidivisa Histórica")
+
+# ==============================================================================
+# 🏢 DISEÑO INTERACTIVO DEL PORTAL DE BIENVENIDA (PANTALLA PRINCIPAL)
+# ==============================================================================
+
+# Encabezado simulando los logos corporativos del Grupo Mayoreo (Febeca, Beval, Sillaca)
+col_logo1, col_logo2, col_logo3 = st.columns(3)
+with col_logo1:
+    st.markdown("<h2 style='text-align: center; color: #1f77b4;'>🔵 febeca</h2><p style='text-align: center; font-size: 12px;'>mayor de ferretería</p>", unsafe_allow_html=True)
+with col_logo2:
+    st.markdown("<h2 style='text-align: center; color: #8c564b;'>🟢 beval</h2><p style='text-align: center; font-size: 12px;'>mayor de repuestos</p>", unsafe_allow_html=True)
+with col_logo3:
+    st.markdown("<h2 style='text-align: center; color: #e377c2;'>🔴 sillaca</h2><p style='text-align: center; font-size: 12px;'>mayor de quincalla</p>", unsafe_allow_html=True)
+
 st.write("---")
+
+# Si estamos dentro de algún módulo, habilitar el botón de retorno arriba
+if st.session_state.modulo_activo != "Portal Principal":
+    if st.button("⬅️ Cambiar de Grupo (Mayoreo / Cofersa) / Volver al Portal Principal"):
+        st.session_state.modulo_activo = "Portal Principal"
+        st.rerun()
+
+# --- RENDERIZADO DEL PORTAL PRINCIPAL DE HERRAMIENTAS ---
+if st.session_state.modulo_activo == "Portal Principal":
+    st.markdown("## 🏛️ Portal de Herramientas: Grupo Mayoreo")
+    st.write("Seleccione una herramienta para comenzar:")
+    st.write("")
+    
+    # Grid de Categorías tipo Dashboard Corporativo
+    cat_col1, cat_col2, cat_col3 = st.columns(3)
+    
+    with cat_col1:
+        st.markdown("### 📊 Análisis y Conciliación")
+        if st.button("📈 Dashboard Analítico Empresarial", use_container_width=True):
+            st.session_state.modulo_activo = "Dashboard"
+            st.rerun()
+        if st.button("📝 Módulo: Asentar Diario (Input / Archivos)", use_container_width=True):
+            st.session_state.modulo_activo = "Asentar"
+            st.rerun()
+        st.button("⚙️ Auditoría de Bancos (Próximamente)", use_container_width=True, disabled=True)
+        st.button("⚙️ Distribución de Gastos (Próximamente)", use_container_width=True, disabled=True)
+        
+    with cat_col2:
+        st.markdown("### 📋 Cierres Mensuales")
+        if st.button("📖 Ver Libro Diario General", use_container_width=True):
+            st.session_state.modulo_activo = "Diario"
+            st.rerun()
+        if st.button("🗂️ Ver Libro Mayor Analítico", use_container_width=True):
+            st.session_state.modulo_activo = "Mayor"
+            st.rerun()
+        if st.button("⚖️ Balance de Comprobación", use_container_width=True):
+            st.session_state.modulo_activo = "Comprobacion"
+            st.rerun()
+            
+    with cat_col3:
+        st.markdown("### ⚙️ Procesos Fiscales")
+        if st.button("📋 Estado de Situación Financiera (VEN-NIF)", use_container_width=True):
+            st.session_state.modulo_activo = "Situacion"
+            st.rerun()
+        st.button("🧮 Cálculo Pensiones (9%) / LOCTI (Próximamente)", use_container_width=True, disabled=True)
+        st.button("🔍 Verificación Débito Fiscal / Retenciones (Próximamente)", use_container_width=True, disabled=True)
+
+# Sincronizar el menú lateral por si el usuario prefiere navegar desde allí
+menu = st.sidebar.selectbox("Navegación Rápida", [
+    "Ir al Portal Principal",
+    "0. Dashboard Interactividad Empresarial",
+    "1. Asentar Diario (Input)",
+    "2. Libro Diario General",
+    "3. Libro Mayor Analítico",
+    "4. Balance de Comprobación",
+    "5. Estado de Situación Financiera"
+], index=0)
+
+# Atajo de la barra lateral para cambiar el estado del módulo
+if menu == "Ir al Portal Principal":
+    pass  # Deja que actúe el estado interno
+elif menu == "0. Dashboard Interactividad Empresarial":
+    st.session_state.modulo_activo = "Dashboard"
+elif menu == "1. Asentar Diario (Input)":
+    st.session_state.modulo_activo = "Asentar"
+elif menu == "2. Libro Diario General":
+    st.session_state.modulo_activo = "Diario"
+elif menu == "3. Libro Mayor Analítico":
+    st.session_state.modulo_activo = "Mayor"
+elif menu == "4. Balance de Comprobación":
+    st.session_state.modulo_activo = "Comprobacion"
+elif menu == "5. Estado de Situación Financiera":
+    st.session_state.modulo_activo = "Situacion"
 
 
 # ==============================================================================
-# ENRUTAMIENTO DEL MENÚ
+# ENRUTAMIENTO DINÁMICO DE MÓDULOS ACTIVOS
 # ==============================================================================
 
 # --- MÓDULO 0: DASHBOARD INTERACTIVO ---
-if menu == "0. Dashboard Interactividad Empresarial":
+if st.session_state.modulo_activo == "Dashboard":
     st.header("📈 Dashboard Analítico de Rendimiento")
     st.write("Análisis gráfico en tiempo real del flujo operativo de la empresa (Ingresos vs. Gastos).")
     
@@ -113,7 +190,6 @@ if menu == "0. Dashboard Interactividad Empresarial":
             st.write("---")
             
             col_g1, col_g2 = st.columns(2)
-            
             with col_g1:
                 st.subheader("Comparativa Temporal: Ingresos vs Gastos")
                 df_trend = df_res.groupby(["Fecha", "Clasificacion"])["Monto_Final"].sum().reset_index()
@@ -137,7 +213,7 @@ if menu == "0. Dashboard Interactividad Empresarial":
                     st.write("No se registran gastos para graficar segmentaciones.")
 
 # --- MÓDULO 1: ASENTAR DIARIO ---
-elif menu == "1. Asentar Diario (Input)":
+elif st.session_state.modulo_activo == "Asentar":
     st.header("📝 Registro de Asientos Contables (Partida Doble)")
     st.write("Conforme al Artículo 34 del Código de Comercio, se deben asentar cronológicamente las operaciones indicando la cuenta deudora y acreedora.")
     
@@ -252,7 +328,6 @@ elif menu == "1. Asentar Diario (Input)":
                     haber_bs = debe_bs
                     haber_usd = debe_usd
                 
-                # LINEA CORREGIDA AQUÍ (Se eliminó la asignación inválida interna):
                 fila_debe = {
                     "ID_Asiento": siguiente_asiento, "Fecha": str(fecha_asiento), 
                     "Código Cuenta": cuenta_debe_cod, "Cuenta": cuenta_debe_nom, 
@@ -273,7 +348,7 @@ elif menu == "1. Asentar Diario (Input)":
                 st.success(f"✅ Comprobante Contable N° {siguiente_asiento} guardado en el Libro Diario.")
 
 # --- MÓDULO 2: LIBRO DIARIO GENERAL ---
-elif menu == "2. Libro Diario General":
+elif st.session_state.modulo_activo == "Diario":
     st.header("📖 Libro Diario Obligatorio")
     st.write("Estructura legal exigida para la presentación ante tribunales de comercio o registros mercantiles.")
     
@@ -305,7 +380,7 @@ elif menu == "2. Libro Diario General":
         )
 
 # --- MÓDULO 3: LIBRO MAYOR ---
-elif menu == "3. Libro Mayor Analítico":
+elif st.session_state.modulo_activo == "Mayor":
     st.header("🗂️ Libro Mayor Folio por Folio")
     st.write("Sintetiza los movimientos cargados al Debe y al Haber de cada cuenta de forma analítica.")
     
@@ -334,7 +409,7 @@ elif menu == "3. Libro Mayor Analítico":
             st.write("---")
 
 # --- MÓDULO 4: BALANCE DE COMPROBACIÓN ---
-elif menu == "4. Balance de Comprobación":
+elif st.session_state.modulo_activo == "Comprobacion":
     st.header("⚖️ Balance de Comprobación (Sumas y Saldos)")
     st.write("Verificación técnica del principio de igualdad matemática en los libros contables.")
     
@@ -358,7 +433,7 @@ elif menu == "4. Balance de Comprobación":
         st.success(f"**Cruce y Cuadre de Columnas:** Suma Debe: {t_d:,.2f} Bs | Suma Haber: {t_h:,.2f} Bs — **¡Cuadre Perfecto!**")
 
 # --- MÓDULO 5: ESTADO DE SITUACIÓN FINANCIERA ---
-elif menu == "5. Estado de Situación Financiera":
+elif st.session_state.modulo_activo == "Situacion":
     st.header("📋 Estado de Situación Financiera (Balance General)")
     st.write("Presentación clasificada de los saldos patrimoniales bajo los estándares internacionales **VEN-NIF / NIC 1**.")
     
